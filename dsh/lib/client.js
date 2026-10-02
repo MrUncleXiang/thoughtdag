@@ -67,7 +67,11 @@ window.__ModuleLoader__.load({
       // the desktop host marks its root; the band exists only there, and only while the strip has height (not in native fullscreen)
       const desktop = () => document.documentElement.dataset.platform !== undefined || document.documentElement.hasAttribute('data-windows-titlebar')
       const strip = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-frame-top-clearance')) || 0
-      const barUp = () => desktop() && strip() > 0
+      // the band only on macOS: there the strip under the traffic lights is transparent and the host's session
+      // header would show through the overlay (#39). On Windows the strip is the host's own chrome (its menu,
+      // the caption buttons), opaque and above us; a band there painted over the host's menu (#55). With no
+      // band the overlay starts below the chrome and the canvas shows its own switch.
+      const barUp = () => document.documentElement.dataset.platform === 'darwin' && strip() > 0
       let spaReady = false
       const dialogBtn = host.querySelector('[data-view="dialog"]')
       const mapBtn = host.querySelector('[data-view="map"]')
@@ -80,7 +84,32 @@ window.__ModuleLoader__.load({
         mapBtn.classList.toggle('active', map)
         mapBtn.setAttribute('aria-pressed', String(map))
       }
-      const close = () => { overlay.hidden = true; bar.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false, bar: false, desktop: desktop() }) }
+      // Where the pill sits: at the end of the host's tab row (对话 · 轨迹 · 记忆系统) when the conversation shows
+      // one, the row the reporter of #55 pointed at; it moves with the row (resize, sidebar, session change).
+      // Without a tab row (another page) it keeps the clearance offset the stylesheet gives it.
+      const place = () => {
+        if (switchEl.hidden) return
+        const tabs = document.querySelector('[data-conversation-tabs]')
+        // the row may be as wide as the panel with its tabs at the left: the last tab's edge is the anchor
+        const last = tabs?.querySelector('[role="tab"]:last-of-type') ?? tabs
+        const r = tabs?.getBoundingClientRect()
+        const edge = last?.getBoundingClientRect().right ?? 0
+        if (r && r.width > 0 && r.height > 0 && r.bottom > 0) {
+          switchEl.style.left = `${Math.round(Math.min(edge + 12, window.innerWidth - switchEl.offsetWidth - 8))}px`
+          switchEl.style.top = `${Math.round(r.top + (r.height - switchEl.offsetHeight) / 2)}px`
+          switchEl.style.transform = 'none'
+          switchEl.dataset.anchored = 'tabs'
+        } else {
+          switchEl.style.left = ''; switchEl.style.top = ''; switchEl.style.transform = ''
+          delete switchEl.dataset.anchored
+        }
+      }
+      let placing = 0
+      const placeSoon = () => { if (placing) return; placing = requestAnimationFrame(() => { placing = 0; place() }) }
+      window.addEventListener('resize', placeSoon)
+      new MutationObserver(placeSoon).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
+      placeSoon()
+      const close = () => { overlay.hidden = true; bar.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false, bar: false, desktop: desktop() }); placeSoon() }
       const showBand = () => { bar.hidden = !barUp(); send('td:view', { shown: true, bar: !bar.hidden, desktop: desktop() }) }
       window.addEventListener('resize', () => { if (!overlay.hidden) showBand() })
       bar.querySelector('[data-view="dialog"]').addEventListener('click', () => close())

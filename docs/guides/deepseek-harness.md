@@ -10,7 +10,7 @@ The plugin embeds the ThoughtDAG canvas in the Harness web UI. Compose the next 
 
 Prerequisites: a configured DeepSeek Harness installation, **0.1.2-rc.1 or later**, with Node.js **22.19+ (22.x) or 24+**.
 
-**Desktop Harness** (0.2.0-rc.2 or later): open the **Plugins** page, search the list for `dsh-thoughtdag`, and install it. Then **restart Harness once**; plugins load at launch. A **Chat | Thought graph** switch then sits above the chat, and the thought graph is the canvas; on the desktop the same switch also lives in the title row.
+**Desktop Harness** (0.2.0-rc.2 or later): open the **Plugins** page, search the list for `dsh-thoughtdag`, and install it. Then **restart Harness once**; plugins load at launch. A **Chat | Thought graph** switch then sits at the end of the conversation's tab row (chat · trajectory · memory), and the thought graph is the canvas; on macOS the same switch also lives in the title row while the canvas is open.
 
 **Web profile**, from the command line:
 
