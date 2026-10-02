@@ -39,6 +39,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
+    version: '0.5.13',
+    date: '2026-10-02',
+    announce: false,
+    lead: {
+      zh: '打开大会话时页面不再卡住：材料、高光、时间轴三个总览在关闭时不再每次节点更新都遍历整张画布（@suhyungJang 的 PR #58，时间轴照同样方式补上）。',
+      en: 'Opening a large session no longer freezes the page: the materials, highlights and timeline overviews stop walking the whole canvas on every node update while closed (@suhyungJang\'s PR #58; the timeline follows the same way).',
+    },
+    items: [],
+  },
+  {
     version: '0.5.12',
     date: '2026-10-01',
     announce: true,
