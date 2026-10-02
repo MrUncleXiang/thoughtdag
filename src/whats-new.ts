@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
+    version: '0.5.14',
+    date: '2026-10-02',
+    announce: false,
+    lead: {
+      zh: '三条回仓库的路：更新公告底部的「GitHub 点个星」，⋯ 菜单里带星数的 GitHub 入口（更新历史底下也有 Releases 和点星的链接），以及插件页的描述和说明里的仓库地址。',
+      en: 'Three doors back to the repository: a star link at the foot of the update notice, a GitHub entry with the star count in the ⋯ menu (with Releases and star links under the release history), and the repository named in the plugin\'s description and README.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
     version: '0.5.13',
     date: '2026-10-02',
     announce: false,
