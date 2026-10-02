@@ -86,7 +86,7 @@ export const en = {
   'whatsNew.title': 'What changed · v{v}',
   'whatsNew.ok': 'Got it',
   'whatsNew.seeAll': 'All release notes',
-  'whatsNew.starLink': 'Star it on GitHub',
+  'whatsNew.starLink': 'Star on GitHub',
   'releaseNotes.onGithub': 'Full notes on GitHub Releases →',
   'menu.github': 'GitHub',
   'menu.githubTitle': 'Open the repository. A star helps others find it',

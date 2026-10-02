@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Star } from 'lucide-react';
 import { useI18n, useT } from '../../i18n';
 import { useUiStore } from '../../lib/ui-store';
 import { WHATS_NEW } from '../../whats-new';
@@ -63,9 +62,10 @@ export default function ReleaseNotesDialog() {
         </ol>
         <div className="sticky bottom-0 bg-card px-6 py-4 border-t border-line flex items-center justify-between gap-4">
           {/* the history's two doors back to the repository: the full notes, and the star */}
-          <div className="flex items-center gap-4 text-xs min-w-0 flex-wrap">
+          <div className="flex items-center gap-2 text-xs min-w-0 flex-wrap">
             <a href={`${REPO_URL}/releases`} target="_blank" rel="noreferrer" className="text-ink-muted hover:text-ink hover:underline" data-release-notes-github>{t('releaseNotes.onGithub')}</a>
-            <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline whitespace-nowrap" data-release-notes-star>{t('whatsNew.starLink')} <Star size={12} strokeWidth={1.75} className="fill-current" /> →</a>
+            <span className="text-ink-faint" aria-hidden>｜</span>
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline whitespace-nowrap" data-release-notes-star>{t('whatsNew.starLink')} ⭐ →</a>
           </div>
           <button
             onClick={() => setOpen(false)}
