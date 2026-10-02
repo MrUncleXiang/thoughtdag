@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Star } from 'lucide-react';
 import { useI18n, useT, fmt } from '../../i18n';
 import { useUiStore } from '../../lib/ui-store';
 import { appVersion } from '../../lib/app-version';
@@ -142,10 +143,9 @@ export default function WhatsNewDialog() {
         <div className="sticky bottom-0 bg-card px-6 py-4 border-t border-line flex items-center justify-between gap-4">
           <div className="min-w-0 text-xs text-ink-muted">
             {/* the one ask, at the one moment it fits: a person who just read what the update brought */}
-            <p className="text-ink-muted [overflow-wrap:anywhere]" data-whats-new-star>
-              {t('whatsNew.star')}{' '}
-              <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline whitespace-nowrap">{t('whatsNew.starLink')}</a>
-            </p>
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline whitespace-nowrap" data-whats-new-star>
+              {t('whatsNew.starLink')} <Star size={12} strokeWidth={1.75} className="fill-current" /> →
+            </a>
             <button
               onClick={() => { close(); useUiStore.getState().setReleaseNotesOpen(true); }}
               className="mt-1 text-ink-faint hover:text-ink hover:underline transition-colors"
