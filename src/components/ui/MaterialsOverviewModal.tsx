@@ -39,6 +39,9 @@ export default function MaterialsOverviewModal({ onLocate }: { onLocate: (nodeId
   const [sort, setSort] = useState<'time' | 'node'>('time');
 
   const entries = useMemo<Entry[]>(() => {
+    // closed: skip the walk, which reruns on every nodes change (a session
+    // import streams hundreds of them)
+    if (!open) return [];
     const out: Entry[] = [];
     for (const n of nodes) {
       const kind = n.data.stepKind;
@@ -49,7 +52,7 @@ export default function MaterialsOverviewModal({ onLocate }: { onLocate: (nodeId
         out.push({ key: n.id, name: title, icon: kind, at: n.data.createdAt, nodeId: n.id, nodeTitle: title, canOpen: true });
         continue;
       }
-      const holder = n.data.question.replace(/\s+/g, ' ').trim().slice(0, 60) || (kind === 'file' ? t('glyph.file') : '—');
+      const holder = n.data.question.slice(0, 200).replace(/\s+/g, ' ').trim().slice(0, 60) || (kind === 'file' ? t('glyph.file') : '—');
       for (const a of n.data.attachments || []) {
         const icon = a.type === 'application/pdf' ? 'pdf' : a.type.startsWith('image/') ? 'img' : 'txt';
         out.push({
@@ -64,7 +67,7 @@ export default function MaterialsOverviewModal({ onLocate }: { onLocate: (nodeId
       ? [...out].sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''))
       : out;
     return sorted.map((e, i) => ({ ...e, showGroup: sort === 'node' && (i === 0 || sorted[i - 1].nodeTitle !== e.nodeTitle) }));
-  }, [nodes, sort, t]);
+  }, [open, nodes, sort, t]);
 
   if (!open) return null;
 
