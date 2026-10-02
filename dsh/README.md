@@ -6,6 +6,8 @@ ThoughtDAG for DeepSeek Harness: open DSH sessions (live or on disk) as
 editable thought graphs on ThoughtDAG's infinite canvas — from inside the
 harness UI.
 
+Source, releases and issues live at **[github.com/chenxiachan/thoughtdag](https://github.com/chenxiachan/thoughtdag)**. If the plugin helps you, a star there helps others find it.
+
 This is a [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 plugin (a Cordis plugin distributed as an npm package), built on the same shell
 pattern as [dsh-synapse](https://github.com/liangmianya/dsh-synapse): the host

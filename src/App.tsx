@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import 'highlight.js/styles/github.css';
-import { ArrowRight, BookOpen, Bot, Brain, CircleHelp, Download, Drama, Eye, FileText, FolderSync, Frame, GitBranch, Hand, Highlighter, History as HistoryIcon, ImageDown, KeyRound, LayoutGrid, ListRestart, Loader2, MessageCircleQuestion, Minimize2, MoreHorizontal, Paperclip, Redo2, Rewind, Scissors, Search, Share2, SquareTerminal, Stethoscope, StickyNote, Trash2, Undo2, Workflow, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Bot, Brain, CircleHelp, Download, Drama, Eye, FileText, FolderSync, Frame, GitBranch, Hand, Highlighter, History as HistoryIcon, ImageDown, KeyRound, LayoutGrid, ListRestart, Loader2, MessageCircleQuestion, Minimize2, MoreHorizontal, Paperclip, Redo2, Rewind, Scissors, Search, Share2, SquareTerminal, Star, Stethoscope, StickyNote, Trash2, Undo2, Workflow, X } from 'lucide-react';
 import './index.css';
 import ThoughtNode from './components/ThoughtNode';
 import ParadigmNode from './components/ParadigmNode';
@@ -31,6 +31,7 @@ import HighlightsOverviewModal from './components/ui/HighlightsOverviewModal';
 import MaterialsOverviewModal from './components/ui/MaterialsOverviewModal';
 import SearchBar from './components/SearchBar';
 import CanvasChat from './components/CanvasChat';
+import { REPO_URL, useGithubStars, formatStars } from './lib/github-stars';
 import DiagnosticsPanel from './components/DiagnosticsPanel';
 import MaterialReader from './components/MaterialReader';
 import ProjectSwitcher from './components/ProjectSwitcher';
@@ -215,6 +216,8 @@ function Canvas() {
   const [inputValue, setInputValue] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // the ⋯ menu's GitHub entry carries the star count: the cached number at once, a fresh one within the hour
+  const githubStars = useGithubStars();
   const [rootRole, setRootRole] = useState('');
   const [showRootRole, setShowRootRole] = useState(false);
   const [landingAtlas, setLandingAtlas] = useState(false);
@@ -1935,6 +1938,19 @@ function Canvas() {
               >
                 <HistoryIcon size={14} strokeWidth={1.75} className="text-ink-faint shrink-0" /> {t('releaseNotes.entry')}
               </button>
+              {/* the way back to the repository, always there and never a nag; the star count is the social proof */}
+              <a
+                href={REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setMoreOpen(false)}
+                className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-wash transition-colors flex items-center gap-2.5"
+                title={t('menu.githubTitle')}
+                data-open-github
+              >
+                <Star size={14} strokeWidth={1.75} className="text-ink-faint shrink-0" /> {t('menu.github')}
+                {githubStars !== null && <span className="ml-auto text-2xs text-ink-faint tabular-nums" data-github-stars>★ {formatStars(githubStars)}</span>}
+              </a>
             </div>
           )}
         </div>

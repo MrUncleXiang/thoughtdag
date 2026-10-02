@@ -3,6 +3,7 @@ import { useI18n, useT } from '../../i18n';
 import { useUiStore } from '../../lib/ui-store';
 import { WHATS_NEW } from '../../whats-new';
 import { appVersion } from '../../lib/app-version';
+import { REPO_URL } from '../../lib/github-stars';
 import { WhatsNewItems } from './WhatsNewDialog';
 
 // The release history behind the ⋯ menu: every entry of the what's-new
@@ -59,7 +60,12 @@ export default function ReleaseNotesDialog() {
             );
           })}
         </ol>
-        <div className="sticky bottom-0 bg-card px-6 py-4 border-t border-line flex justify-end">
+        <div className="sticky bottom-0 bg-card px-6 py-4 border-t border-line flex items-center justify-between gap-4">
+          {/* the history's two doors back to the repository: the full notes, and the star */}
+          <div className="flex items-center gap-4 text-xs min-w-0 flex-wrap">
+            <a href={`${REPO_URL}/releases`} target="_blank" rel="noreferrer" className="text-ink-muted hover:text-ink hover:underline" data-release-notes-github>{t('releaseNotes.onGithub')}</a>
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline" data-release-notes-star>{t('whatsNew.starLink')}</a>
+          </div>
           <button
             onClick={() => setOpen(false)}
             className="text-xs text-ink px-4 py-2 rounded-lg border border-line hover:bg-wash transition-colors"

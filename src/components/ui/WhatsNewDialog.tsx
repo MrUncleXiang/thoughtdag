@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n, useT, fmt } from '../../i18n';
 import { useUiStore } from '../../lib/ui-store';
 import { appVersion } from '../../lib/app-version';
+import { REPO_URL } from '../../lib/github-stars';
 import { announcedSince, type WhatsNewEntry, type WhatsNewItem, type WhatsNewMedia } from '../../whats-new';
 import type { Lang } from '../../i18n';
 
@@ -139,13 +140,20 @@ export default function WhatsNewDialog() {
           ))}
         </ol>
         <div className="sticky bottom-0 bg-card px-6 py-4 border-t border-line flex items-center justify-between gap-4">
-          <button
-            onClick={() => { close(); useUiStore.getState().setReleaseNotesOpen(true); }}
-            className="text-xs text-ink-muted hover:text-ink hover:underline transition-colors"
-            data-whats-new-all
-          >
-            {t('whatsNew.seeAll')}
-          </button>
+          <div className="min-w-0 text-xs text-ink-muted">
+            {/* the one ask, at the one moment it fits: a person who just read what the update brought */}
+            <p className="text-ink-muted [overflow-wrap:anywhere]" data-whats-new-star>
+              {t('whatsNew.star')}{' '}
+              <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline whitespace-nowrap">{t('whatsNew.starLink')}</a>
+            </p>
+            <button
+              onClick={() => { close(); useUiStore.getState().setReleaseNotesOpen(true); }}
+              className="mt-1 text-ink-faint hover:text-ink hover:underline transition-colors"
+              data-whats-new-all
+            >
+              {t('whatsNew.seeAll')}
+            </button>
+          </div>
           <button
             ref={okRef}
             onClick={close}
