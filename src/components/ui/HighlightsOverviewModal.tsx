@@ -35,9 +35,12 @@ export default function HighlightsOverviewModal({ onLocate }: { onLocate: (nodeI
   const [intent, setIntent] = useState('');
 
   const entries = useMemo<Entry[]>(() => {
+    // closed: skip the walk, which reruns on every nodes change (a session
+    // import streams hundreds of them)
+    if (!open) return [];
     const out: Entry[] = [];
     for (const n of nodes) {
-      const title = n.data.question.replace(/\s+/g, ' ').trim().slice(0, 60) || '—';
+      const title = n.data.question.slice(0, 200).replace(/\s+/g, ' ').trim().slice(0, 60) || '—';
       for (const h of n.data.highlights || []) {
         out.push({ hlId: h.id, text: h.text, at: h.at, nodeId: n.id, nodeTitle: title });
       }
@@ -46,7 +49,7 @@ export default function HighlightsOverviewModal({ onLocate }: { onLocate: (nodeI
       ? [...out].sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''))
       : out; // canvas order = grouped by node already
     return sorted.map((e, i) => ({ ...e, showGroup: sort === 'node' && (i === 0 || sorted[i - 1].nodeTitle !== e.nodeTitle) }));
-  }, [nodes, sort]);
+  }, [open, nodes, sort]);
 
   if (!open) return null;
 
