@@ -25,8 +25,10 @@ export default function TimelineOverviewModal({ onLocate }: { onLocate: (nodeId:
   const lang = useI18n((s) => s.lang);
   // The modal never renders the recent-edit glow, so the clock is moot: 0.
   const ladderVersion = useLadderCacheVersion();
+  // closed: skip the walk, which reruns on every nodes change (a session import streams hundreds of them;
+  // the materials and highlights overviews do the same, #58)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- ladderVersion moves when a local ladder lands; the entries then carry it
-  const entries = useMemo(() => collectTimeline(nodes, 0, { ladders: true }), [nodes, ladderVersion]);
+  const entries = useMemo(() => (open ? collectTimeline(nodes, 0, { ladders: true }) : []), [open, nodes, ladderVersion]);
   // How much of each step to show. The slider is continuous, like the canvas
   // zoom: type size and row spacing follow it smoothly, and the text level
   // (topic, takeaway, brief, abstract) hands off at the half-steps with the
@@ -61,7 +63,7 @@ export default function TimelineOverviewModal({ onLocate }: { onLocate: (nodeId:
   // The journey paragraph: session-cached per (graph fingerprint, interface
   // language) — reopening is free until the map changes, and switching the
   // language toggle narrates in the other language.
-  const fp = useMemo(() => graphFingerprint(nodes), [nodes]);
+  const fp = useMemo(() => (open ? graphFingerprint(nodes) : ''), [open, nodes]);
   const [ged, setGed] = useState<Gedankengang | null>(null);
   const [gedLoading, setGedLoading] = useState(false);
   const [gedFailed, setGedFailed] = useState(false);
