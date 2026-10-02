@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
+    version: '0.5.15',
+    date: '2026-10-02',
+    announce: false,
+    lead: {
+      zh: 'Harness 插件的「对话 | 思维图」开关固定在窗口顶部中间偏右，所有平台一致，带上了三点标记；Windows 上不再在标题栏里画标题带，画布从标题栏下方开始（#55 的回访）。',
+      en: 'The harness plugin\'s Chat | Thought graph switch sits at the top of the window, centre-right, on every platform, with the three-dot mark; on Windows the title band is gone and the canvas starts below the title bar (the #55 follow-up).',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
     version: '0.5.14',
     date: '2026-10-02',
     announce: false,
