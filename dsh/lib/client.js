@@ -46,11 +46,13 @@ window.__ModuleLoader__.load({
       // the host's session header shows through (#39). A browser tab has no
       // clearance: no band, the overlay fills the window, the canvas keeps its
       // own switch.
-      // The floating pill sits BELOW the host's top strip (the caption drag region on Windows, the hiddenInset
-      // row on macOS): pinned at 12px it overlapped the strip and the strip swallowed the clicks on its upper
-      // half. A browser tab publishes no clearance, so there the pill stays where it was. no-drag besides, so
-      // whatever drag row it may still cross never takes its clicks.
-      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:calc(var(--dsh-frame-top-clearance,0px) + 12px);left:50%;display:flex;gap:2px;transform:translateX(-50%);-webkit-app-region:no-drag;border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}.dsh-td-bar{position:fixed;z-index:121;top:0;left:0;right:0;height:var(--dsh-frame-top-clearance,0px);display:flex;align-items:center;gap:14px;padding:0 16px;box-sizing:border-box;background:#faf9f7;border-bottom:1px solid #e7e2d9;font:500 12px Inter,system-ui,sans-serif;color:#6b7280;overflow:hidden;-webkit-app-region:drag;user-select:none}.dsh-td-bar[hidden]{display:none}html[data-platform="darwin"] .dsh-td-bar{padding-left:max(var(--dsh-frame-leading-clearance,0px),84px)}html[data-windows-titlebar] .dsh-td-bar{padding-right:calc(100% - env(titlebar-area-width,100%) + 16px)}.dsh-td-bar .dsh-td-brand{display:flex;align-items:center;gap:7px;color:#111827;font-weight:600;font-size:13px;white-space:nowrap}.dsh-td-bar .dsh-td-brand i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6d5dfc;box-shadow:0 -7px 0 #a99cff,0 7px 0 #f0a35a}.dsh-td-bar .dsh-td-switch{position:static;transform:none;-webkit-app-region:no-drag}.dsh-td-bar .dsh-td-title{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7280}.dsh-td-overlay{position:fixed;z-index:100;inset:var(--dsh-frame-top-clearance,0px) 0 0 0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
+      // The floating pill sits in the window's top strip, centre-right, on every platform: 12px down in a
+      // browser tab, vertically centred in the host's own strip on the desktop (40px on Windows, 48px on
+      // macOS). It is no-drag, so the strip's drag region never takes its clicks (#55: pinned half into the
+      // drag region without no-drag, its upper half was swallowed; moved below the strip, it landed in the
+      // host's session header). Centre-right keeps it clear of the host's menu on the left and the window
+      // controls on the right.
+      style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:60%;display:flex;gap:2px;transform:translateX(-50%);-webkit-app-region:no-drag;border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch[hidden]{display:none}html[data-platform] .dsh-td-switch,html[data-windows-titlebar] .dsh-td-switch{top:max(2px,calc((var(--dsh-frame-top-clearance,40px) - 36px) / 2))}.dsh-td-bar{position:fixed;z-index:121;top:0;left:0;right:0;height:var(--dsh-frame-top-clearance,0px);display:flex;align-items:center;gap:14px;padding:0 16px;box-sizing:border-box;background:#faf9f7;border-bottom:1px solid #e7e2d9;font:500 12px Inter,system-ui,sans-serif;color:#6b7280;overflow:hidden;-webkit-app-region:drag;user-select:none}.dsh-td-bar[hidden]{display:none}html[data-platform="darwin"] .dsh-td-bar{padding-left:max(var(--dsh-frame-leading-clearance,0px),84px)}html[data-windows-titlebar] .dsh-td-bar{padding-right:calc(100% - env(titlebar-area-width,100%) + 16px)}.dsh-td-bar .dsh-td-brand{display:flex;align-items:center;gap:7px;color:#111827;font-weight:600;font-size:13px;white-space:nowrap}.dsh-td-bar .dsh-td-brand i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6d5dfc;box-shadow:0 -7px 0 #a99cff,0 7px 0 #f0a35a}.dsh-td-bar .dsh-td-switch{position:static;transform:none;-webkit-app-region:no-drag}.dsh-td-bar .dsh-td-title{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7280}.dsh-td-overlay{position:fixed;z-index:100;inset:var(--dsh-frame-top-clearance,0px) 0 0 0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
       document.head.append(style)
 
       const host = document.createElement('div')
@@ -84,32 +86,7 @@ window.__ModuleLoader__.load({
         mapBtn.classList.toggle('active', map)
         mapBtn.setAttribute('aria-pressed', String(map))
       }
-      // Where the pill sits: at the end of the host's tab row (对话 · 轨迹 · 记忆系统) when the conversation shows
-      // one, the row the reporter of #55 pointed at; it moves with the row (resize, sidebar, session change).
-      // Without a tab row (another page) it keeps the clearance offset the stylesheet gives it.
-      const place = () => {
-        if (switchEl.hidden) return
-        const tabs = document.querySelector('[data-conversation-tabs]')
-        // the row may be as wide as the panel with its tabs at the left: the last tab's edge is the anchor
-        const last = tabs?.querySelector('[role="tab"]:last-of-type') ?? tabs
-        const r = tabs?.getBoundingClientRect()
-        const edge = last?.getBoundingClientRect().right ?? 0
-        if (r && r.width > 0 && r.height > 0 && r.bottom > 0) {
-          switchEl.style.left = `${Math.round(Math.min(edge + 12, window.innerWidth - switchEl.offsetWidth - 8))}px`
-          switchEl.style.top = `${Math.round(r.top + (r.height - switchEl.offsetHeight) / 2)}px`
-          switchEl.style.transform = 'none'
-          switchEl.dataset.anchored = 'tabs'
-        } else {
-          switchEl.style.left = ''; switchEl.style.top = ''; switchEl.style.transform = ''
-          delete switchEl.dataset.anchored
-        }
-      }
-      let placing = 0
-      const placeSoon = () => { if (placing) return; placing = requestAnimationFrame(() => { placing = 0; place() }) }
-      window.addEventListener('resize', placeSoon)
-      new MutationObserver(placeSoon).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] })
-      placeSoon()
-      const close = () => { overlay.hidden = true; bar.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false, bar: false, desktop: desktop() }); placeSoon() }
+      const close = () => { overlay.hidden = true; bar.hidden = true; switchEl.hidden = false; setView(false); send('td:view', { shown: false, bar: false, desktop: desktop() }) }
       const showBand = () => { bar.hidden = !barUp(); send('td:view', { shown: true, bar: !bar.hidden, desktop: desktop() }) }
       window.addEventListener('resize', () => { if (!overlay.hidden) showBand() })
       bar.querySelector('[data-view="dialog"]').addEventListener('click', () => close())
