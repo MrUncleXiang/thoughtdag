@@ -151,7 +151,7 @@ export default function WhatsNewDialog() {
             <span className="text-ink-faint" aria-hidden>｜</span>
             {/* the one ask, at the one moment it fits: a person who just read what the update brought */}
             <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline whitespace-nowrap" data-whats-new-star>
-              {t('whatsNew.starLink')} ⭐ →
+              {t('whatsNew.starLink')} ⭐？
             </a>
           </div>
           <button

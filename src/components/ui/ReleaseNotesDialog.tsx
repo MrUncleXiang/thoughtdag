@@ -65,7 +65,7 @@ export default function ReleaseNotesDialog() {
           <div className="flex items-center gap-2 text-xs min-w-0 flex-wrap">
             <a href={`${REPO_URL}/releases`} target="_blank" rel="noreferrer" className="text-ink-muted hover:text-ink hover:underline" data-release-notes-github>{t('releaseNotes.onGithub')}</a>
             <span className="text-ink-faint" aria-hidden>｜</span>
-            <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline whitespace-nowrap" data-release-notes-star>{t('whatsNew.starLink')} ⭐ →</a>
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline whitespace-nowrap" data-release-notes-star>{t('whatsNew.starLink')} ⭐？</a>
           </div>
           <button
             onClick={() => setOpen(false)}
