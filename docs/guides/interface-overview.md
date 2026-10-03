@@ -42,7 +42,7 @@ The menu omits actions that do not apply to the current canvas, so yours may be 
 
 ## 2. Canvas
 
-The canvas is the main workspace. Hold the middle or right mouse button and drag to pan, and use the wheel or two-finger scroll to zoom. Left-drag on empty space to box-select, double-click empty space to create a question, and drag a node to reposition it. Selecting two or more nodes opens the [multi-selection toolbar](/guides/canvas-projects#multi-selection-toolbar) at the top. Zoom controls appear at the bottom, and the minimap can also pan and zoom the view. See [Canvas, navigation, and frames](/guides/canvas-projects) for the complete interaction guide.
+The canvas is the main workspace. Hold the middle or right mouse button and drag to pan, or hold Space and left-drag; the wheel or a pinch zooms. On a trackpad, turn on "Scroll pans the canvas" in the ⋯ menu: two-finger scroll then pans, pinch zooms, and ⌘/Ctrl + scroll zooms too. Left-drag on empty space to box-select, double-click empty space to create a question, and drag a node to reposition it. Selecting two or more nodes opens the [multi-selection toolbar](/guides/canvas-projects#multi-selection-toolbar) at the top. Zoom controls appear at the bottom, and the minimap can also pan and zoom the view. See [Canvas, navigation, and frames](/guides/canvas-projects) for the complete interaction guide.
 
 ## 3. Nodes
 

@@ -2,8 +2,9 @@
 
 ## Move around the canvas
 
-- **Hold the middle or right mouse button and drag** to pan.
-- **Use the wheel or two-finger scroll** to zoom.
+- **Hold the middle or right mouse button and drag** to pan, or **hold Space and left-drag**.
+- **The wheel or a pinch** zooms.
+- **Trackpad**: turn on "Scroll pans the canvas" in the ⋯ menu; two-finger scroll then pans, pinch zooms, and ⌘/Ctrl + scroll zooms too. On a Magic Mouse, Control + click opens the context menu.
 - **Left-drag on empty space** to box-select nodes.
 - **Drag a node** to change its position.
 
