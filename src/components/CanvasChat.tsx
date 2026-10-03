@@ -37,6 +37,8 @@ export default function CanvasChat({ open, onClose, onLocate }: { open: boolean;
   const [focusCleared, setFocusCleared] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => { setTurns(loadTurns(projectId)); }, [projectId]);
+  const firstProject = useRef(projectId);
+  useEffect(() => { if (projectId !== firstProject.current) { firstProject.current = projectId; if (open) onClose(); } }, [projectId, open, onClose]);
   useEffect(() => { if (open) list.current?.scrollTo({ top: list.current.scrollHeight }); }, [open, turns.length, busy]);
   // a beacon left on by a hover must not outlive the dialog
   useEffect(() => { if (!open) useUiStore.getState().setBeaconNodeId(null); }, [open]);
@@ -50,17 +52,28 @@ export default function CanvasChat({ open, onClose, onLocate }: { open: boolean;
   const send = async () => {
     const q = draft.trim();
     if (!q || busy) return;
-    const user: CanvasChatTurn = { id: generateId(), role: 'user', text: q, at: new Date().toISOString(), focus: focusId };
+    // the question belongs to the canvas it is asked on: the answer is stored and shown there and nowhere else,
+    // even when the person has switched canvases by the time it arrives (#59)
+    const origin = projectId;
+    const user: CanvasChatTurn = { id: generateId(), role: 'user', text: q, at: new Date().toISOString(), focus: focusId, project: origin };
     const next = [...turns, user];
-    setTurns(next); saveTurns(projectId, next); setDraft(''); setBusy(true);
+    setTurns(next); saveTurns(origin, next); setDraft(''); setBusy(true);
     try {
       const { turn } = await askCanvas(nodes, edges, focusId, q, turns, lang, selectedModel ?? undefined);
-      const done = [...next, turn];
-      setTurns(done); saveTurns(projectId, done);
+      turn.project = origin;
+      if ((useProjects.getState().activeId ?? 'default') === origin) {
+        const done = [...next, turn];
+        setTurns(done); saveTurns(origin, done);
+      } else {
+        saveTurns(origin, [...loadTurns(origin), turn]);
+      }
     } finally { setBusy(false); }
   };
 
+  // the map a turn's numbers were made with: its own, kept on the turn; the current one for turns from before 0.5.16
+  const mapOf = (turn: CanvasChatTurn): Map<string, string> => (turn.aliases ? new Map(Object.entries(turn.aliases)) : byAlias);
   const drop = (turn: CanvasChatTurn, question: string) => {
+    if (turn.project && turn.project !== projectId) return;
     const st = useStore.getState();
     const cited = (turn.cites ?? []).filter((id) => st.nodes.some((n) => n.id === id));
     const anchor = (turn.focus && st.nodes.find((n) => n.id === turn.focus)) || (cited.length ? st.nodes.find((n) => n.id === cited[cited.length - 1]) : undefined);
@@ -68,7 +81,7 @@ export default function CanvasChat({ open, onClose, onLocate }: { open: boolean;
     const position = anchor
       ? { x: anchor.position.x + (turn.focus ? 0 : 560), y: turn.focus ? Math.max(anchor.position.y + 420, ...below.map((n) => n.position.y + 420)) : anchor.position.y }
       : { x: Math.max(0, ...st.nodes.map((n) => n.position.x + 560)), y: 0 };
-    const node = makeNode(question, answerForCanvas(turn.text, byAlias, st.nodes, lang), !turn.focus);
+    const node = makeNode(question, answerForCanvas(turn.text, mapOf(turn), st.nodes, lang), !turn.focus);
     node.position = position;
     node.data = { ...node.data, isCollapsed: false, createdAt: turn.at, lastGeneratedAt: turn.at, generatedBy: [turn.model ?? null], isBranch: !!turn.focus };
     st.pushHistory();
@@ -139,12 +152,12 @@ export default function CanvasChat({ open, onClose, onLocate }: { open: boolean;
             {turn.error
               ? <div className="max-w-[92%] text-xs text-red-500 bg-red-50 rounded-2xl rounded-bl-md px-3 py-2 break-words">{turn.error}</div>
               : <div className="max-w-[92%] bg-wash text-ink rounded-2xl rounded-bl-md px-3 py-2 markdown-body text-sm leading-relaxed break-words" onClick={onAnswerClick} onMouseOver={onAnswerOver} onMouseOut={onAnswerOut} data-chat-answer>
-                  <Markdown>{answerForCanvas(turn.text, byAlias, nodes, lang, 'alias')}</Markdown>
+                  <Markdown>{answerForCanvas(turn.text, mapOf(turn), nodes, lang, 'alias')}</Markdown>
                 </div>}
             {!turn.error && (
               <div className="flex items-center gap-2 text-2xs text-ink-faint pl-1">
                 {turn.model && <span className="font-mono">{turn.model.split('/').pop()}</span>}
-                <button type="button" onClick={() => drop(turn, questionOf(i))} className="text-accent hover:underline" data-chat-drop>{t('chat.drop')}</button>
+                {(!turn.project || turn.project === projectId) && <button type="button" onClick={() => drop(turn, questionOf(i))} className="text-accent hover:underline" data-chat-drop>{t('chat.drop')}</button>}
               </div>
             )}
           </div>

@@ -22,6 +22,11 @@ export interface CanvasChatTurn {
   context?: ChatContextItem[];
   /** node ids the answer cited (unknown numbers excluded) */
   cites?: string[];
+  /** the numbers the answer used, as the request mapped them: a number only means something within its request,
+   *  so the text is rendered with this map ever after, and chips and wires can never disagree (#60) */
+  aliases?: Record<string, string>;
+  /** the canvas the question was asked on: an answer lands only there (#59) */
+  project?: string;
   error?: string;
 }
 /** a parsed answer: text runs and node citations, unknown numbers kept apart so the reader sees them */
@@ -150,8 +155,11 @@ export async function askCanvas(nodes: ThoughtNode[], edges: ThoughtEdge[], focu
   const at = new Date().toISOString();
   try {
     const text = await llmCall(messages, undefined, model);
-    const cites = [...new Set(citations(text, byAlias).flatMap((p) => (p.kind === 'node' ? [p.id] : [])))];
-    return { turn: { id: `${Date.now()}-a`, role: 'assistant', text, at, focus: focusId, model, context, cites }, byAlias };
+    const parts = citations(text, byAlias);
+    const cites = [...new Set(parts.flatMap((p) => (p.kind === 'node' ? [p.id] : [])))];
+    const aliases: Record<string, string> = {};
+    for (const p of parts) if (p.kind === 'node') aliases[p.alias] = p.id;
+    return { turn: { id: `${Date.now()}-a`, role: 'assistant', text, at, focus: focusId, model, context, cites, aliases }, byAlias };
   } catch (e) {
     return { turn: { id: `${Date.now()}-a`, role: 'assistant', text: '', at, focus: focusId, model, context, error: e instanceof Error ? e.message : String(e) }, byAlias };
   }

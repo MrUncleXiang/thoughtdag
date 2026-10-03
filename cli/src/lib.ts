@@ -1115,11 +1115,15 @@ async function turnsJson(opts: { offset?: number; limit?: number; head?: number 
   // bridge call on the main process) for the tens of seconds a big index takes (#57). The count is right
   // once the rebuild has written the manifest; a caller that sees `refreshing` asks again later.
   if (opts.limit === 0) {
-    const text = await loadText();
-    if (!Object.keys(text.sessions).length) {
+    // what decides is the manifest's VERSION, not whether it lists sessions: a manifest from an earlier index
+    // version (or none) means a rebuild is due; a current one with no sessions is a genuinely empty index (a
+    // fresh machine), which no rebuild changes, so it counts as 0 rather than refreshing forever (#57)
+    const current = await fsp.readFile(TEXT_FILE, 'utf8').then((raw) => (JSON.parse(raw) as { version?: number }).version === INDEX_VERSION).catch(() => false);
+    if (!current) {
       refreshInBackground ??= ensureFresh().then(() => undefined, () => undefined).finally(() => { refreshInBackground = null; });
       return { total: 0, turns: [], refreshing: true };
     }
+    const text = await loadText();
     return { total: Object.values(text.sessions).reduce((a, b) => a + b, 0), turns: [] };
   }
   const facts = await ensureFresh();
