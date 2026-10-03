@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
+    version: '0.5.16',
+    date: '2026-10-03',
+    announce: false,
+    lead: {
+      zh: '问画布的三处修正：问题属于提问时的那张画布，回答只存在那里，切画布时对话框关闭（#59）；一轮回答记住自己请求时的编号，之后落到画布上芯片和连线一致（#60）；全新机器上的全量回忆计数直接得 0，不再一直显示刷新中（#57）。示例画布的欢迎便签和指南写全了平移画布的每种方式。',
+      en: 'Three corrections to ask-the-canvas: a question belongs to the canvas it was asked on, its answer is stored there alone, and switching canvases closes the dialog (#59); a turn keeps the numbers its request used, so chips and wires agree when it is dropped later (#60); the full-recall count on a fresh machine reads zero instead of refreshing forever (#57). The example canvas\'s welcome note and the guides name every way to pan.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.12 entry stays the announcement, this one is history only
     version: '0.5.15',
     date: '2026-10-02',
     announce: false,
