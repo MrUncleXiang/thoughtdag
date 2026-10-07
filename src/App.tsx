@@ -55,6 +55,7 @@ import { countTokens } from './utils';
 import { buildExampleGraph } from './lib/example-graph';
 import { COLORS, FRAME_COLORS, PANEL_INSET } from './lib/constants';
 import { panelShift } from './lib/panel-shift';
+import { useReaderDock } from './lib/reader-dock';
 import { migrateActiveCanvasToVault, gcVaultAtBoot } from './lib/attachment-vault-boot';
 import { consumeOpenRouterCallback, handMintedKeyToModal, startOpenRouterOAuth } from './lib/openrouter-oauth';
 import { bootDesktopUpdateUI } from './lib/desktop-update-ui';
@@ -1049,11 +1050,39 @@ function Canvas() {
     return () => clearTimeout(timer);
   }, [panelOpen, selectedNodeId]);
 
+  // The docked reader: a column on the left the canvas steps aside for
+  // (lib/reader-dock decides its width, or 0). While it is up, the reader
+  // follows the selection: a selected material shows in it, and a question
+  // anchored to a page scrolls it to that page, so the text beside the
+  // canvas is always the one the selected node came from.
+  const readerDock = useReaderDock();
+  useEffect(() => {
+    if (!readerDock.docked || !selectedNodeId) return;
+    const st = useStore.getState();
+    const n = st.nodes.find((x) => x.id === selectedNodeId);
+    if (!n) return;
+    const ui = useUiStore.getState();
+    const kind = n.data.stepKind;
+    if (kind === 'file' || kind === 'link') {
+      if (ui.readerNodeId !== n.id) ui.setReaderNodeId(n.id);
+      return;
+    }
+    const anchor = n.data.anchor;
+    if (!anchor?.page) return;
+    const grownFrom = st.edges.find((e) =>
+      e.target === n.id && !e.data?.isCrossLink
+      && st.nodes.some((m) => m.id === e.source && (m.data.stepKind === 'file' || m.data.stepKind === 'link' || m.data.stepKind === 'note')))?.source;
+    const clippedFrom = anchor.attId ? st.nodes.find((m) => m.data.attachments?.some((a) => a.id === anchor.attId))?.id : undefined;
+    const material = grownFrom ?? clippedFrom;
+    if (material) ui.setReaderNodeId(material, { page: anchor.page });
+  }, [readerDock.docked, selectedNodeId]);
+
   return (
     <div className="relative w-full h-full" data-searching={searching || undefined}>
-      {/* Canvas — full width always; the focus panel floats on top of it */}
+      {/* Canvas — steps aside by the docked reader's width; the focus panel floats on top of it */}
       <div
-        className="relative h-full w-full"
+        className="absolute inset-y-0 right-0"
+        style={{ left: readerDock.width }}
         onDoubleClick={(e) => {
           // Double-click on empty canvas → drop an ask node right there
           // (same gesture family as double-click-on-node = open panel)

@@ -83,6 +83,12 @@ interface UiState {
   /** One-shot landing spot for the reader: scroll to this page and open this
       thread on mount (set by canvas p.N chips, consumed by the overlay). */
   readerJump: { page?: number; threadId?: string } | null;
+  /** How the reader shows: docked as a column on the canvas's left, the
+      canvas and the node panel staying live beside it, or the full-screen
+      overlay. Persisted; the dock falls back to the overlay in narrow windows. */
+  readerMode: 'dock' | 'full';
+  /** The docked reader's column width (persisted on drag end). */
+  readerWidth: number;
   /** Selected LLM id; null = server default. */
   selectedModel: string | null;
   agentEffort: AgentEffort;
@@ -206,6 +212,8 @@ interface UiState {
   viewerLoadError: boolean;
   setViewerLoadError: (v: boolean) => void;
   setReaderNodeId: (id: string | null, jump?: { page?: number; threadId?: string }) => void;
+  setReaderMode: (mode: 'dock' | 'full') => void;
+  setReaderWidth: (w: number) => void;
   setPanelOpen: (open: boolean) => void;
   setSelectedModel: (model: string | null) => void;
   setAgentEffort: (level: AgentEffort) => void;
@@ -383,6 +391,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   readerNodeId: null,
   readerJump: null,
   setReaderNodeId: (id, jump) => set({ readerNodeId: id, readerJump: id ? (jump ?? null) : null }),
+  readerMode: localStorage.getItem('thoughtdag.readerMode') === 'full' ? 'full' : 'dock',
+  readerWidth: (() => { const raw = localStorage.getItem('thoughtdag.readerWidth'); const n = raw ? parseInt(raw, 10) : NaN; return Number.isFinite(n) ? n : 560; })(),
+  setReaderMode: (mode) => { localStorage.setItem('thoughtdag.readerMode', mode); set({ readerMode: mode }); },
+  setReaderWidth: (w) => set({ readerWidth: w }),
   drafts: {},
   setDraft: (key, text) => set((s) => {
     if (!text) {

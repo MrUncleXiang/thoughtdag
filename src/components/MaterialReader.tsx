@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Crosshair, FileText, Highlighter, Link2, Loader2, Pencil, RefreshCw, ScanText, Send, Sparkles, StickyNote, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronDown, ChevronRight, Crosshair, FileText, Highlighter, Link2, Loader2, Maximize2, PanelLeft, Pencil, RefreshCw, ScanText, Send, Sparkles, StickyNote, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Attachment, ThoughtNode } from '../types';
 import { useStore } from '../store';
@@ -13,6 +13,7 @@ import { isViewerMode } from '../lib/viewer';
 import { loadAttachmentContent } from '../lib/attachment-vault';
 import { HtmlMaterialView } from './HtmlMaterialView';
 import SearchToggles from './ui/SearchToggles';
+import { useReaderDock, READER_MIN_WIDTH, READER_DEFAULT_WIDTH, READER_STRIP_WIDTH, DOCK_MIN_WINDOW, type ReaderDock } from '../lib/reader-dock';
 
 // MaterialReader: the reading overlay — a VIEW onto a material node, never a
 // container. Select a passage (in the original PDF's text layer, or in the
@@ -62,20 +63,74 @@ const TEXT_LAYER_PROBE_CHARS = 60; // below this across the first pages = scanne
 // Where you were in each material, per session — reopening finds your place.
 const scrollMemory = new Map<string, number>();
 
+/** A material's name as the reader's header and its material switcher show it. */
+function materialTitle(n: ThoughtNode): string {
+  const d = n.data;
+  const pdf = d.attachments?.find((a) => a.type === 'application/pdf');
+  if (pdf?.name) return pdf.name;
+  if (d.stepKind === 'link') return d.linkTitle || d.linkUrl || '';
+  return d.attachments?.[0]?.name || d.question.split('\n')[0].replace(/^#+\s*/, '').slice(0, 48) || '…';
+}
+
+/** The nodes the reader can show: files, links, and plain nodes carrying a PDF. */
+const isReadable = (n: ThoughtNode): boolean =>
+  n.data.stepKind === 'file' || n.data.stepKind === 'link'
+  || (!n.data.stepKind && (n.data.attachments ?? []).some((a) => a.type === 'application/pdf'));
+
 export default function MaterialReader({ onLocate }: { onLocate: (id: string) => void }) {
   const readerNodeId = useUiStore((s) => s.readerNodeId);
   const node = useStore((s) => (readerNodeId ? s.nodes.find((n) => n.id === readerNodeId) : undefined));
+  const dock = useReaderDock();
   useEffect(() => {
     // the node can be deleted from the canvas while the reader is open
     if (readerNodeId && !node) useUiStore.getState().setReaderNodeId(null);
   }, [readerNodeId, node]);
   if (!node) return null;
-  return <ReaderOverlay key={node.id} node={node} onLocate={onLocate} />;
+  return <ReaderOverlay key={node.id} node={node} onLocate={onLocate} dock={dock} />;
 }
 
-function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: string) => void }) {
+function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: (id: string) => void; dock: ReaderDock }) {
   const t = useT();
   const data = node.data;
+  // Three faces, one body (lib/reader-dock decides which): the full-screen
+  // overlay; the column docked on the canvas's left, where the canvas and
+  // the node panel stay live beside the text; and, when not even the
+  // narrowest column fits, a strip that keeps the material's name. Docked,
+  // a question asked here still lands on the canvas (the One Rule), but its
+  // answer reads right here, in the thread view stacked under the text; the
+  // canvas's selection and camera stay where they were.
+  const docked = dock.docked;
+  const collapsed = dock.collapsed;
+  const [resizing, setResizing] = useState(false);
+  const onResizePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setResizing(true);
+  };
+  const onResizePointerMove = (e: React.PointerEvent) => {
+    if (!resizing) return;
+    useUiStore.getState().setReaderWidth(Math.min(dock.maxWidth, Math.max(READER_MIN_WIDTH, Math.round(e.clientX))));
+  };
+  const onResizePointerUp = (e: React.PointerEvent) => {
+    if (!resizing) return;
+    setResizing(false);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    localStorage.setItem('thoughtdag.readerWidth', String(useUiStore.getState().readerWidth));
+  };
+  const onResizeDoubleClick = () => {
+    useUiStore.getState().setReaderWidth(READER_DEFAULT_WIDTH);
+    localStorage.removeItem('thoughtdag.readerWidth');
+  };
+  // the material switcher: every readable node on the canvas, this one marked
+  const [pickerOpen, setPickerOpen] = useState(false);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement | null)?.closest?.('[data-reader-material-picker]')) setPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [pickerOpen]);
   // Plain thought nodes carrying a PDF read as files too — the reading
   // loop belongs to the material, not to the node kind.
   const kind = data.stepKind === 'file' || (!data.stepKind && (data.attachments ?? []).some((a) => a.type === 'application/pdf'))
@@ -268,8 +323,12 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
     if (!q || !ask) return;
     // p.N provenance rides inside the quoted passage (document selections only)
     const passage = ask.targetNodeId ? ask.text : (ask.page != null ? `(p.${ask.page}) ${ask.text}` : ask.text);
+    const prevSelected = useStore.getState().selectedNodeId;
     useStore.getState().addQuestion(q, { parentId: ask.targetNodeId ?? node.id, branchContext: passage });
     const freshId = useStore.getState().selectedNodeId;
+    // docked, the reader keeps the floor: the canvas's selection (and so the
+    // node panel) stay as they were; the answer reads in the thread view below
+    if (docked) useStore.getState().setSelectedNodeId(prevSelected);
     // document selections remember the page they came from (both views);
     // original-view ones additionally leave a mark on that page
     if (!ask.targetNodeId && ask.page != null && freshId) {
@@ -469,8 +528,11 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
   const submitWhole = () => {
     const q = wholeDraft.trim();
     if (!q) return;
+    const prevSelected = useStore.getState().selectedNodeId;
     useStore.getState().addQuestion(q, { parentId: node.id });
-    setThreadId(useStore.getState().selectedNodeId);
+    const freshId = useStore.getState().selectedNodeId;
+    if (docked) useStore.getState().setSelectedNodeId(prevSelected);
+    setThreadId(freshId);
     setWholeDraft('');
   };
 
@@ -520,6 +582,9 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
     : docAtt?.digestBy;
   // the digest node has its own tab; the footer chips list the questions
   const grownChildren = useMemo(() => children.filter((c) => !c.data.digestOf), [children]);
+  // every material on the canvas, for the header's switcher (docked, the
+  // reader stays up across materials; the switcher is how you move between them)
+  const materials = useMemo(() => nodes.filter(isReadable), [nodes]);
 
   // interacted places wear marks on the original pages: every child of this
   // material that carries an anchor, grouped by page
@@ -570,7 +635,9 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
     const q = followDraft.trim();
     const last = thread[thread.length - 1];
     if (!q || !last) return;
+    const prevSelected = useStore.getState().selectedNodeId;
     useStore.getState().addQuestion(q, { parentId: last.id });
+    if (docked) useStore.getState().setSelectedNodeId(prevSelected);
     setFollowDraft('');
   };
 
@@ -607,6 +674,43 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
     window.setTimeout(attempt, 150);
   }, [doc]);
 
+  // a later landing while this material stays open (a p.N chip on the canvas,
+  // a node selected beside the docked reader): scroll there now. The mount-time
+  // jump is the object jumpRef captured; anything else is new.
+  const laterJump = useUiStore((s) => s.readerJump);
+  useEffect(() => {
+    if (!laterJump || laterJump === jumpRef.current) return;
+    useUiStore.setState({ readerJump: null });
+    if (laterJump.threadId) setThreadId(laterJump.threadId);
+    const page = laterJump.page;
+    if (!page) return;
+    let tries = 0;
+    const attempt = () => {
+      const el = bodyRef.current?.querySelector(`[data-page="${page}"]`);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if (++tries < 25) window.setTimeout(attempt, 100);
+    };
+    window.setTimeout(attempt, 50);
+  }, [laterJump]);
+
+  // the reading column's width, measured: PDF pages are rendered to fit it
+  // (the docked column is as wide as you dragged it; the overlay's body
+  // loses the rail's width). Debounced so a drag does not re-render every page.
+  const [bodyW, setBodyW] = useState(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    let timer: number | null = null;
+    const ro = new ResizeObserver(() => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => setBodyW(el.clientWidth), 120);
+    });
+    ro.observe(el);
+    setBodyW(el.clientWidth);
+    return () => { ro.disconnect(); if (timer) window.clearTimeout(timer); };
+  }, [docked, collapsed]);
+  const pageWidth = Math.max(240, Math.min(860, (bodyW || window.innerWidth * 0.94) - 96));
+
   useEffect(() => {
     const el = bodyRef.current;
     const saved = scrollMemory.get(node.id);
@@ -624,20 +728,23 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
     window.setTimeout(attempt, 100);
   }, [node.id, doc]);
 
-  // Esc: progressive dismissal — ask bar, then the rail, then the overlay
+  // Esc: progressive dismissal — ask bar, then the thread view, then the
+  // overlay. Docked, the column itself stays: past the thread view, Esc is
+  // the canvas's (step out of the selection).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (editing) { e.stopPropagation(); commitEdit(); return; }
+      if (ask) { e.stopPropagation(); setAsk(null); return; }
+      if (threadId) { e.stopPropagation(); setThreadId(null); return; }
+      if (docked) return;
       e.stopPropagation();
-      if (editing) { commitEdit(); return; }
-      if (ask) { setAsk(null); return; }
-      if (threadId) { setThreadId(null); return; }
       close();
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, ask, threadId]);
+  }, [editing, ask, threadId, docked]);
 
   const title = pdfAtt?.name
     ?? (kind === 'link' ? (data.linkTitle || data.linkUrl || '') : '')
@@ -654,13 +761,42 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
   const askLeft = ask ? Math.max(180, Math.min(ask.x, window.innerWidth - 200)) : 0;
   const askTop = ask ? Math.min(ask.y + 10, window.innerHeight - 150) : 0;
 
-  return (
-    <div className="fixed inset-0 z-[80] bg-ink/25 backdrop-blur-[2px] flex items-center justify-center animate-fade-in" data-material-reader>
-      <div className={`bg-surface rounded-2xl shadow-2xl border border-line ${threadId ? "w-[min(1480px,96vw)]" : "w-[min(1060px,94vw)]"} h-[93vh] flex flex-col overflow-hidden transition-all duration-200`}>
+  const shownTitle = title || noteTitle || fileFallbackTitle;
+  const iconButton = 'w-7 h-7 rounded-lg text-ink-faint hover:bg-wash hover:text-ink flex items-center justify-center transition-colors shrink-0';
+
+  // the three faces share this body: header, reading column (+ rail), footer
+  const inner = (
+    <>
         {/* header */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-line bg-card shrink-0">
           {headerIcon}
-          <span className="text-sm font-semibold text-ink truncate min-w-0" title={title || noteTitle || fileFallbackTitle}>{title || noteTitle || fileFallbackTitle}</span>
+          {materials.length > 1 ? (
+            <div className="relative min-w-0" data-reader-material-picker>
+              <button
+                onClick={() => setPickerOpen((v) => !v)}
+                title={t('reader.switchMaterial')}
+                className="flex items-center gap-1 text-sm font-semibold text-ink min-w-0 max-w-full hover:text-accent transition-colors"
+              >
+                <span className="truncate">{shownTitle}</span>
+                <ChevronDown size={13} strokeWidth={1.75} className="shrink-0 text-ink-faint" />
+              </button>
+              {pickerOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-line rounded-xl shadow-xl py-1 min-w-[240px] max-w-[420px] max-h-[50vh] overflow-y-auto">
+                  {materials.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setPickerOpen(false); if (m.id !== node.id) useUiStore.getState().setReaderNodeId(m.id); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs truncate transition-colors ${m.id === node.id ? 'text-accent bg-accent/10' : 'text-ink hover:bg-wash'}`}
+                    >
+                      {materialTitle(m)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-sm font-semibold text-ink truncate min-w-0" title={shownTitle}>{shownTitle}</span>
+          )}
           {numPages != null && <span className="text-2xs text-ink-faint font-mono shrink-0">{numPages}p</span>}
           <div className="flex-1" />
           {((pdfAtt && !pdfError) || imageAtts.length > 0 || htmlAtt || linkHtml) && (
@@ -755,19 +891,30 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
               <Pencil size={13} strokeWidth={1.75} />
             </button>
           )}
-          <button onClick={close} title={t('panel.close')} className="w-7 h-7 rounded-lg text-ink-faint hover:bg-wash hover:text-ink flex items-center justify-center transition-colors shrink-0">
+          {/* dock beside the canvas, or expand to the overlay */}
+          {docked ? (
+            <button onClick={() => useUiStore.getState().setReaderMode('full')} title={t('reader.expand')} data-reader-expand className={iconButton}>
+              <Maximize2 size={14} strokeWidth={1.75} />
+            </button>
+          ) : window.innerWidth >= DOCK_MIN_WINDOW && (
+            <button onClick={() => useUiStore.getState().setReaderMode('dock')} title={t('reader.dock')} data-reader-dock className={iconButton}>
+              <PanelLeft size={14} strokeWidth={1.75} />
+            </button>
+          )}
+          <button onClick={close} title={t('panel.close')} className={iconButton}>
             <X size={16} strokeWidth={1.75} />
           </button>
         </div>
 
-        {/* body: document column + (optional) annotation rail */}
-        <div className="flex-1 min-h-0 flex">
-        <div ref={bodyRef} onMouseUp={handleMouseUp} onScroll={(e) => scrollMemory.set(node.id, e.currentTarget.scrollTop)} className="flex-1 min-w-0 overflow-y-auto bg-wash/60">
+        {/* body: document column + (optional) thread view — beside the text
+            in the overlay, stacked under it in the docked column */}
+        <div className={`flex-1 min-h-0 flex ${docked ? 'flex-col' : ''}`}>
+        <div ref={bodyRef} onMouseUp={handleMouseUp} onScroll={(e) => scrollMemory.set(node.id, e.currentTarget.scrollTop)} className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-wash/60">
           {view === 'original' && pdfAtt && (
             doc && pdfjs ? (
               <div className="flex flex-col items-center gap-4 py-6 px-4">
                 {Array.from({ length: doc.numPages }, (_, i) => (
-                  <PdfPage key={i + 1} doc={doc} pdfjs={pdfjs} pageNo={i + 1} width={Math.min(860, window.innerWidth * (threadId ? 0.96 : 0.94) - (threadId ? 420 : 0) - 96)} anchors={anchorsByPage.get(i + 1)} activeThreadId={threadId} onAnchorClick={setThreadId} clipMode={clipMode} onClipped={handleClipped} />
+                  <PdfPage key={i + 1} doc={doc} pdfjs={pdfjs} pageNo={i + 1} width={pageWidth} anchors={anchorsByPage.get(i + 1)} activeThreadId={threadId} onAnchorClick={setThreadId} clipMode={clipMode} onClipped={handleClipped} />
                 ))}
               </div>
             ) : (
@@ -840,7 +987,7 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
                     <RefreshCw size={11} strokeWidth={1.75} /> {t('reader.redigest')}
                   </button>
                   {digestNode && (
-                    <button onClick={() => { close(); onLocate(digestNode.id); }} className="flex items-center gap-1 hover:text-accent transition-colors" title={t('reader.locate')}>
+                    <button onClick={() => { if (!docked) close(); onLocate(digestNode.id); }} className="flex items-center gap-1 hover:text-accent transition-colors" title={t('reader.locate')}>
                       <Crosshair size={11} strokeWidth={1.75} /> {t('reader.digestOnCanvas')}
                     </button>
                   )}
@@ -892,10 +1039,12 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
           )}
         </div>
 
-        {/* annotation rail: the thread lives on the canvas; this is its
-            reading view — quote, streaming answer, follow-up */}
+        {/* thread view: the thread lives on the canvas; this is its reading
+            view — quote, streaming answer, follow-up. A rail beside the text
+            in the overlay; docked, a band under the text (the column has
+            no width to spare, and the answer belongs where you read). */}
         {threadId && thread.length > 0 && (
-          <div className="w-[420px] shrink-0 border-l border-line bg-card flex flex-col min-h-0" data-reader-rail>
+          <div className={docked ? 'w-full h-[42%] shrink-0 border-t border-line bg-card flex flex-col min-h-0' : 'w-[420px] shrink-0 border-l border-line bg-card flex flex-col min-h-0'} data-reader-rail data-reader-thread={docked || undefined}>
             <div className="flex items-start gap-2 px-4 py-2.5 border-b border-line shrink-0">
               <div className="flex-1 min-w-0">
                 {thread[0].data.branchContext ? (
@@ -907,7 +1056,7 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
                 )}
               </div>
               <button
-                onClick={() => { close(); onLocate(thread[0].id); }}
+                onClick={() => { if (!docked) close(); onLocate(thread[0].id); }}
                 title={t('reader.locate')}
                 className="w-6 h-6 rounded-md text-ink-faint hover:text-accent hover:bg-wash flex items-center justify-center transition-colors shrink-0"
               >
@@ -1009,7 +1158,7 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
                     <span className="truncate">{c.data.question.replace(/\s+/g, ' ').slice(0, 32) || '…'}</span>
                   </button>
                   <button
-                    onClick={() => { close(); onLocate(c.id); }}
+                    onClick={() => { if (!docked) close(); onLocate(c.id); }}
                     title={t('reader.locate')}
                     className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-ink-faint hover:text-accent shrink-0"
                   >
@@ -1020,10 +1169,11 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
             </div>
           )}
         </div>
-      </div>
+    </>
+  );
 
-      {/* floating ask bar under the selection */}
-      {ask && (
+  // floating ask bar under the selection: fixed, the same in every face
+  const askBar = ask && (
         <div
           className="fixed z-[95] bg-card border border-line rounded-xl shadow-xl p-2.5 w-[360px] animate-fade-in"
           style={{ left: askLeft - 180, top: askTop }}
@@ -1095,7 +1245,59 @@ function ReaderOverlay({ node, onLocate }: { node: ThoughtNode; onLocate: (id: s
             </button>
           </div>
         </div>
-      )}
+  );
+
+  // the strip: not even the narrowest column fits beside the node panel. The
+  // material's name stays in view; the chevron closes the panel (deselects)
+  // so the column returns.
+  if (docked && collapsed) {
+    return (
+      <div className="absolute left-0 top-0 bottom-0 z-[30] bg-card border-r border-line flex flex-col items-center py-3 gap-3" style={{ width: READER_STRIP_WIDTH }} data-material-reader data-reader-strip>
+        <button onClick={() => useStore.getState().setSelectedNodeId(null)} title={t('reader.stripExpand')} data-reader-strip-expand className="w-7 h-7 rounded-lg text-ink-muted hover:bg-wash hover:text-ink flex items-center justify-center transition-colors">
+          <ChevronRight size={15} strokeWidth={1.75} />
+        </button>
+        {headerIcon}
+        <span className="text-xs text-ink-muted truncate [writing-mode:vertical-rl] max-h-[45vh]" title={shownTitle}>{shownTitle}</span>
+        <div className="flex-1" />
+        <button onClick={() => useUiStore.getState().setReaderMode('full')} title={t('reader.expand')} className={iconButton}>
+          <Maximize2 size={14} strokeWidth={1.75} />
+        </button>
+        <button onClick={close} title={t('panel.close')} className={iconButton}>
+          <X size={15} strokeWidth={1.75} />
+        </button>
+      </div>
+    );
+  }
+
+  // the docked column: a sheet along the canvas's left edge, resizable on
+  // its right; the canvas steps aside by its width (App reads lib/reader-dock)
+  if (docked) {
+    return (
+      <div className={`absolute left-0 top-0 bottom-0 z-[30] bg-surface border-r border-line flex flex-col ${resizing ? 'select-none' : ''}`} style={{ width: dock.width }} data-material-reader data-reader-docked>
+        {inner}
+        <div
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          onDoubleClick={onResizeDoubleClick}
+          className={`absolute right-0 top-0 h-full w-[8px] -mr-[3px] z-20 cursor-col-resize hover:bg-accent/20 transition-colors flex items-center justify-center ${resizing ? 'bg-accent/30' : ''}`}
+          title={t('panel.resizeTitle')}
+          data-reader-resize
+        >
+          <div className={`w-[3px] h-9 rounded-full transition-colors ${resizing ? 'bg-accent' : 'bg-line-strong'}`} />
+        </div>
+        {askBar}
+      </div>
+    );
+  }
+
+  // the overlay: the reader as a focused sheet over the canvas
+  return (
+    <div className="fixed inset-0 z-[80] bg-ink/25 backdrop-blur-[2px] flex items-center justify-center animate-fade-in" data-material-reader>
+      <div className={`bg-surface rounded-2xl shadow-2xl border border-line ${threadId ? "w-[min(1480px,96vw)]" : "w-[min(1060px,94vw)]"} h-[93vh] flex flex-col overflow-hidden transition-all duration-200`}>
+        {inner}
+      </div>
+      {askBar}
     </div>
   );
 }
