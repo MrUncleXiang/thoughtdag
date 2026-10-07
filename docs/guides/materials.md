@@ -8,14 +8,14 @@ A material node shows its source name, type, and connection state. Unwired mater
 
 ## Understand the reader
 
-**Double-click a file, image, or link node** to open the reader. Controls that do not apply to the current material are hidden, but the layout follows the same areas:
+**Double-click a file, image, or link node** to open the reader. By default it **docks on the canvas's left**: the text stays, its right edge drags to resize, and the canvas and the node panel keep working beside it. Ask from the reader and the answer reads in a thread band under the text; the canvas stays put. The dropdown by the title switches materials, selecting a material on the canvas switches the reader too, and selecting a page-anchored question scrolls the text to that page. The top-right button expands to the full-screen view and back; a narrow window uses full screen on its own. Controls that do not apply to the current material are hidden, but the layout follows the same areas:
 
 | Area | Purpose |
 |---|---|
 | View bar | Switch between **Original**, **Text**, and **Digest** when available; enter clipping, recognition, editing, or digest regeneration |
 | Reading surface | Display PDF pages, an image, HTML pages, or extracted text while remembering reading position |
 | Selection toolbar | **Ask**, **highlight source text**, or **save the selection as a note/image node** |
-| Reading rail | Show the question chain grown from the source, continue it, and jump to its canvas node |
+| Thread band | Show the question chain grown from the source, continue it, and jump to its canvas node; under the text when docked, beside it in full screen |
 | Question index | Switch between whole-document and page-anchored questions and revisit existing branches |
 
 PDF and image views also expose relevant zoom, region-clipping, and recognition controls. When a scanned PDF has no selectable text, switch to extracted text or use recognition; recognition and image understanding that call a model use your [model configuration](/guides/models-tools#connect-and-select-a-model).
