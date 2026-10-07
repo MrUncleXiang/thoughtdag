@@ -59,7 +59,7 @@ The recording cycles through **Search nodes → Frame navigator → Tidy layout 
 
 ## Arrange the graph
 
-**Tidy layout** lives in the top-right [More actions menu](/guides/interface-overview#more-actions-menu). After confirmation, it follows wire direction, keeps a conversation chain vertically aligned, and moves branches to the side. **Align selection** cleans up a local group without rebuilding the entire graph. Both operations change positions only.
+**Tidy layout** lives in the top-right [More actions menu](/guides/interface-overview#more-actions-menu). After confirmation, it follows wire direction, keeps a conversation chain vertically aligned, and moves branches to the side. **Align selection** cleans up a local group without rebuilding the entire graph. Both operations change positions only, and neither moves or resizes a frame: a frame stays where you drew it, so after a tidy you may need to drag a frame back over the nodes that left it.
 
 ## Use frames
 

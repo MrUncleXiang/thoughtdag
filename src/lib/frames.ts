@@ -1,12 +1,12 @@
 import type { ThoughtNode } from '../types';
 
-// Frame membership, decided in ONE place for everything that asks (frame
-// dragging, auto layout). A frame is a region: an ordinary node belongs to
-// it when the node's centre lies inside; another frame belongs only when it
-// lies fully inside and is smaller. Two frames that merely overlap share the
-// nodes in their overlap and never own each other — so dragging one of them
-// cannot steal the other away from its own members (#40), and the nesting
-// auto layout sees is the same nesting dragging sees.
+// Frame membership, decided in ONE place for everything that asks (today
+// only frame dragging: auto layout leaves frames alone since 0.5.17, #64).
+// A frame is a region: an ordinary node belongs to it when the node's centre
+// lies inside; another frame belongs only when it lies fully inside and is
+// smaller. Two frames that merely overlap share the nodes in their overlap
+// and never own each other — so dragging one of them cannot steal the other
+// away from its own members (#40).
 
 export type Rect = { x: number; y: number; width: number; height: number };
 

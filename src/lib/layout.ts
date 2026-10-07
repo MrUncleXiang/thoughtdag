@@ -1,6 +1,5 @@
 import type { ThoughtNode, ThoughtEdge } from '../types';
 import { getDescendantIds } from './graph';
-import { frameContains, frameMembers, frameRect, isFrameNode } from './frames';
 import { COLLAPSED_LAYOUT_HEIGHT, LAYOUT_COL_WIDTH, LAYOUT_H_GAP, LAYOUT_V_GAP } from './constants';
 
 // Estimated rendered height of a node — fallback when React Flow hasn't
@@ -79,52 +78,8 @@ export function healLegacyNoteEdges(nodes: ThoughtNode[], edges: ThoughtEdge[]):
   return out;
 }
 
-type FrameSnapshot = {
-  id: string;
-  memberIds: string[];
-  rect: { x: number; y: number; width: number; height: number };
-  nestingLevel: number;
-};
-
-const FRAME_SIDE_PADDING = 36;
-const FRAME_TITLE_GAP = 44;
-const FRAME_NESTING_GAP = 24;
-const FRAME_MIN_WIDTH = 280;
-const FRAME_MIN_HEIGHT = 180;
-
-function snapshotLayoutFrames(allNodes: ThoughtNode[]): FrameSnapshot[] {
-  const frames = allNodes.filter((n) => n.data.stepKind === 'frame' && n.data.frameCarry !== false);
-  const snapshots = frames.map((frame) => {
-    // Membership is the same rule dragging uses (lib/frames): ordinary nodes
-    // by centre, and it is frozen here, before layout, so a node cannot switch
-    // frames while it is being moved. Nested frames are not listed as members:
-    // they are re-wrapped in their own right, inner to outer, below.
-    const memberIds = frameMembers(frame, allNodes).filter((n) => !isFrameNode(n)).map((n) => n.id);
-    return { id: frame.id, memberIds, rect: frameRect(frame), nestingLevel: 0 };
-  });
-
-  // nesting is full containment (also lib/frames) — the relation dragging
-  // uses to carry one frame with another; partial overlap nests nothing
-  const contains = (outer: FrameSnapshot, inner: FrameSnapshot) => outer.id !== inner.id && frameContains(outer.rect, inner.rect);
-
-  // Level 0 is the innermost frame. Each enclosing layer gets more padding,
-  // which keeps nested frame borders from collapsing onto the same edge.
-  const memo = new Map<string, number>();
-  const levelOf = (frame: FrameSnapshot): number => {
-    const cached = memo.get(frame.id);
-    if (cached !== undefined) return cached;
-    const innerFrames = snapshots.filter((candidate) => contains(frame, candidate));
-    const level = innerFrames.length === 0 ? 0 : 1 + Math.max(...innerFrames.map(levelOf));
-    memo.set(frame.id, level);
-    return level;
-  };
-  for (const snapshot of snapshots) snapshot.nestingLevel = levelOf(snapshot);
-  return snapshots;
-}
-
 export function autoLayout(allNodes: ThoughtNode[], allEdges: ThoughtEdge[]): ThoughtNode[] {
   if (allNodes.length === 0) return allNodes;
-  const frameSnapshots = snapshotLayoutFrames(allNodes);
   // Content nodes (notes / files) are user-arranged material: layout never
   // moves them and their edges don't shape the column tree. A node whose
   // only parent is a content node simply roots its own chain.
@@ -602,48 +557,16 @@ export function autoLayout(allNodes: ThoughtNode[], allEdges: ThoughtEdge[]): Th
     positioned.set(note.id, { x, y });
   }
 
-  // --- Pass 6: Frame follow-up ---
-  // Frames are not part of the column tree. Instead, linked frames snapshot
-  // their members before layout and re-wrap those same members afterwards.
-  // This preserves the conversation layout law while keeping spatial regions
-  // attached to the nodes the user grouped.
-  const frameLayouts = new Map<string, { position: { x: number; y: number }; width: number; height: number }>();
-  const nodeById = new Map(allNodes.map((n) => [n.id, n]));
-  const contentKinds = new Set(['note', 'file', 'link']);
-  const snapshotsInnerToOuter = [...frameSnapshots].sort((a, b) => a.nestingLevel - b.nestingLevel);
-
-  for (const frame of snapshotsInnerToOuter) {
-    if (frame.memberIds.length === 0) continue;
-    const rects = frame.memberIds
-      .map((id) => {
-        const node = nodeById.get(id);
-        if (!node) return null;
-        const position = positioned.get(id) ?? node.position;
-        const width = node.measured?.width ?? node.width ?? LAYOUT_COL_WIDTH;
-        const height = contentKinds.has(node.data.stepKind ?? '')
-          ? (node.measured?.height ?? node.height ?? 120)
-          : Math.max(node.measured?.height ?? 0, node.height ?? 0, nodeHeight(node));
-        return { x: position.x, y: position.y, width, height };
-      })
-      .filter((r): r is { x: number; y: number; width: number; height: number } => r !== null);
-    if (rects.length === 0) continue;
-
-    const minX = Math.min(...rects.map((r) => r.x));
-    const minY = Math.min(...rects.map((r) => r.y));
-    const maxX = Math.max(...rects.map((r) => r.x + r.width));
-    const maxY = Math.max(...rects.map((r) => r.y + r.height));
-    const sidePadding = FRAME_SIDE_PADDING + frame.nestingLevel * FRAME_NESTING_GAP;
-    const topPadding = sidePadding + FRAME_TITLE_GAP;
-    const x = minX - sidePadding;
-    const y = minY - topPadding;
-    const width = Math.max(FRAME_MIN_WIDTH, maxX - minX + sidePadding * 2);
-    const height = Math.max(FRAME_MIN_HEIGHT, maxY - minY + topPadding + sidePadding);
-    frameLayouts.set(frame.id, { position: { x, y }, width, height });
-  }
-
+  // Frames are not part of the column tree, and layout never touches them:
+  // a frame is a region the user drew, and it stays exactly where it was
+  // drawn whatever layout does to the nodes. (0.4.15 to 0.5.16 re-wrapped a
+  // frame around the members it held before layout; two frames whose
+  // members share one conversation tree come out of the column pass
+  // interleaved, the re-wrapped frame then spans the other's nodes, and the
+  // centre rule hands those nodes over on the next pass, #64.) Nodes that
+  // layout moves out of a frame are the user's to re-frame, by dragging the
+  // frame.
   return allNodes.map((node) => {
-    const frameLayout = frameLayouts.get(node.id);
-    if (frameLayout) return { ...node, ...frameLayout };
     const pos = positioned.get(node.id);
     return pos ? { ...node, position: pos } : node;
   });
