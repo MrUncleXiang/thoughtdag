@@ -16,7 +16,7 @@ export default function BackupDialog() {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const close = () => useUiStore.getState().setBackupDialogOpen(false);
-  if (!open || !backupCapable) return null;
+  if (!open || !backupCapable()) return null;
 
   // Absolute clock time keeps the render pure (no Date.now() while rendering)
   const rel = lastAt
