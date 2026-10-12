@@ -32,7 +32,20 @@ window.__ModuleLoader__.load({
         return session === undefined ? null : { id, title: session.displayTitle ?? null, cwd: session.cwd ?? null }
       }
 
-      const style = document.createElement('style')
+      // The sheet is OWNED: the host's module loader claims every untagged
+      // <style> for whichever plugin is materializing at that moment and
+      // removes it again when that plugin is replaced or reloaded; untagged,
+      // this sheet went with a stranger and the overlay collapsed into the
+      // document flow (#70). data-plugin names the owner, data-plugin-css the
+      // sheet; and apply reuses what an earlier run left, so nothing doubles.
+      const CSS_ID = 'dsh-thoughtdag/client.css'
+      let style = document.head.querySelector(`style[data-plugin-css="${CSS_ID}"]`)
+      if (!style) {
+        style = document.createElement('style')
+        style.setAttribute('data-plugin', 'dsh-thoughtdag')
+        style.setAttribute('data-plugin-css', CSS_ID)
+        document.head.append(style)
+      }
       // The map overlay starts below the window's top strip: the desktop host
       // publishes --dsh-frame-top-clearance on its root (48px under the
       // hiddenInset traffic lights on macOS, the caption height on Windows,
@@ -53,11 +66,14 @@ window.__ModuleLoader__.load({
       // host's session header). Centre-right keeps it clear of the host's menu on the left and the window
       // controls on the right.
       style.textContent = '.dsh-td-switch{position:fixed;z-index:120;top:12px;left:60%;display:flex;align-items:center;gap:2px;transform:translateX(-50%);-webkit-app-region:no-drag;border:1px solid #d1d5db;border-radius:999px;background:rgba(255,255,255,.96);padding:3px;backdrop-filter:blur(10px)}.dsh-td-switch button{height:28px;border:0;border-radius:999px;background:transparent;padding:0 11px;color:#6b7280;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}.dsh-td-switch button:hover{background:#f3f4f6;color:#111827}.dsh-td-switch button.active{background:#111827;color:#fff}.dsh-td-switch .dsh-td-mark{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6d5dfc;box-shadow:0 -7px 0 #a99cff,0 7px 0 #f0a35a;margin:0 6px 0 8px;flex:none}.dsh-td-switch[hidden]{display:none}html[data-platform] .dsh-td-switch,html[data-windows-titlebar] .dsh-td-switch{top:max(2px,calc((var(--dsh-frame-top-clearance,40px) - 36px) / 2))}.dsh-td-bar{position:fixed;z-index:121;top:0;left:0;right:0;height:var(--dsh-frame-top-clearance,0px);display:flex;align-items:center;gap:14px;padding:0 16px;box-sizing:border-box;background:#faf9f7;border-bottom:1px solid #e7e2d9;font:500 12px Inter,system-ui,sans-serif;color:#6b7280;overflow:hidden;-webkit-app-region:drag;user-select:none}.dsh-td-bar[hidden]{display:none}html[data-platform="darwin"] .dsh-td-bar{padding-left:max(var(--dsh-frame-leading-clearance,0px),84px)}html[data-windows-titlebar] .dsh-td-bar{padding-right:calc(100% - env(titlebar-area-width,100%) + 16px)}.dsh-td-bar .dsh-td-brand{display:flex;align-items:center;gap:7px;color:#111827;font-weight:600;font-size:13px;white-space:nowrap}.dsh-td-bar .dsh-td-brand i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6d5dfc;box-shadow:0 -7px 0 #a99cff,0 7px 0 #f0a35a}.dsh-td-bar .dsh-td-switch{position:static;transform:none;-webkit-app-region:no-drag}.dsh-td-bar .dsh-td-title{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7280}.dsh-td-overlay{position:fixed;z-index:100;inset:var(--dsh-frame-top-clearance,0px) 0 0 0;background:#faf9f7}.dsh-td-overlay[hidden]{display:none}.dsh-td-overlay iframe{display:block;width:100%;height:100%;border:0}'
-      document.head.append(style)
 
-      const host = document.createElement('div')
+      let host = document.body.querySelector(':scope > [data-dsh-thoughtdag]')
+      if (!host) {
+        host = document.createElement('div')
+        host.setAttribute('data-dsh-thoughtdag', '')
+        document.body.append(host)
+      }
       host.innerHTML = '<div class="dsh-td-switch" role="group" aria-label="view switch"><i class="dsh-td-mark" title="ThoughtDAG"></i><button type="button" data-view="dialog" class="active" aria-pressed="true">对话</button><button type="button" data-view="map" aria-pressed="false">思维图</button></div><div class="dsh-td-bar" data-window-drag hidden><span class="dsh-td-brand"><i></i>ThoughtDAG</span><div class="dsh-td-switch" role="group" aria-label="view switch"><button type="button" data-view="dialog" aria-pressed="false">对话</button><button type="button" data-view="map" class="active" aria-pressed="true">思维图</button></div><span class="dsh-td-title"></span></div><section class="dsh-td-overlay" hidden><iframe title="ThoughtDAG" data-src="/thoughtdag/"></iframe></section>'
-      document.body.append(host)
 
       // the plugin's version, for the canvas's update dialog and release history
       let pluginVersion = null
