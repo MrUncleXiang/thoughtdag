@@ -426,7 +426,13 @@ function contentOf(body) {
   throw new HttpError(400, 'body needs text or blocks')
 }
 
-const SOURCE = { kind: 'plugin', plugin: 'dsh-thoughtdag' }
+// The attribution on every message this plugin injects. The kind is this
+// producer's OWN: the harness's v4 session format refuses the bare shared
+// literal 'plugin' (its validator throws "format v4 message requires a
+// producer-owned source kind" before the Session adopts the event, so the
+// targeted turn dies and nothing is persisted, #69); only the v3→v4 migration
+// ever rewrote it. scripts/test-inject-source.mjs holds this line to that rule.
+const SOURCE = { kind: 'plugin:dsh-thoughtdag', plugin: 'dsh-thoughtdag' }
 
 // ── the other agents' session files on this machine ────────────────────
 
