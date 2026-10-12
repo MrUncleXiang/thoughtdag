@@ -1139,6 +1139,8 @@ export const zh: Record<keyof typeof en, string> = {
   'caps.anysearchCleared': '搜索 key 已移除。',
   'caps.enginePickTitle': '联网搜索用哪个服务端引擎。何时搜索仍由模型判断，这里决定搜得多好。',
   'caps.webSearchOff': '当前接口没有自带搜索通道。',
+  'caps.webSearchOffHost': '当前接口没有自带搜索通道。接入自带联网搜索的接口（OpenRouter）后，联网开关自动出现。',
+  'caps.webSearchViaInterface': '由当前接口自带的联网搜索提供。',
   'caps.scholar': '学术检索',
   'caps.scholarDesc': 'arXiv + Semantic Scholar · 免费公开 API，始终可用',
   'caps.memory': '记忆',

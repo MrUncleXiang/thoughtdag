@@ -1140,6 +1140,8 @@ export const en = {
   'caps.anysearchCleared': 'Search key removed.',
   'caps.enginePickTitle': 'Which server-side search engine handles web searches. The model still decides when to search; this decides how well.',
   'caps.webSearchOff': 'The current interfaces carry no search channel of their own.',
+  'caps.webSearchOffHost': 'The current interfaces carry no search channel of their own. Connect an interface with built-in web search (OpenRouter) and the web switch appears.',
+  'caps.webSearchViaInterface': 'Provided by the current interface\'s own web search.',
   'caps.scholar': 'Scholarly search',
   'caps.scholarDesc': 'arXiv + Semantic Scholar · free public APIs, always available',
   'caps.memory': 'Memory',
