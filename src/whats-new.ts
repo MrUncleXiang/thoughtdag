@@ -39,6 +39,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a quiet release: the 0.5.17 entry stays the announcement, this one is history only
+    version: '0.5.18',
+    date: '2026-10-12',
+    announce: false,
+    lead: {
+      zh: 'Harness 插件的一批修正。本地自动备份在插件里改由宿主写文件：文件夹用 Harness 自己的对话框选，Windows 桌面端不再选完没反应（@Heizaillica469 的 PR #67）；之前在 Harness 里用浏览器授权启用过备份的，更新后请重选一次文件夹。桌面端 0.2 的 v4 会话里，从画布带入上下文提问或注入消息不再让那一轮失败（#69）。插件注入的样式表标明归属，不再被宿主误认领给别的插件后删掉，画布浮层不再塌掉（#70）。插件里的能力面板不再显示宿主用不了的搜索引擎下拉和 AnySearch key 入口（#72）。',
+      en: 'A batch of harness plugin corrections. Inside the plugin the local backup is now written by the host: the folder comes from Harness\'s own dialog, and the Windows desktop no longer goes silent after picking one (@Heizaillica469\'s PR #67); if you had enabled the backup inside Harness through the browser\'s own permission, pick the folder once more after updating. In the desktop 0.2 app\'s v4 sessions, asking from the canvas with inherited context or injecting a message no longer kills that turn (#69). The plugin\'s style sheet now names its owner, so the host\'s loader no longer hands it to another plugin and drops it, which collapsed the canvas overlay (#70). The capabilities panel inside the plugin no longer shows the engine picker or the AnySearch key the host cannot use (#72).',
+    },
+    items: [],
+  },
+  {
     version: '0.5.17',
     date: '2026-10-07',
     announce: true,
