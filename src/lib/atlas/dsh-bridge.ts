@@ -288,10 +288,10 @@ export function installDshSessionsBridge(apiBase: string): void {
     }
     if (d.type === 'td:view') {
       const was = shown;
-      const v = d as { shown?: boolean; bar?: boolean; desktop?: boolean };
+      const v = d as { shown?: boolean; bar?: boolean; desktop?: boolean; panel?: boolean };
       shown = v.shown !== false;
       // the host says whether its title band carries the 对话|思维图 switch (then the canvas hides its own) and whether it is the desktop app
-      if (v.bar !== undefined || v.desktop !== undefined) useUiStore.getState().setHarnessHost({ bar: !!v.bar, desktop: !!v.desktop });
+      if (v.bar !== undefined || v.desktop !== undefined) useUiStore.getState().setHarnessHost({ bar: !!v.bar, desktop: !!v.desktop, panel: !!v.panel });
       if (shown && !was) wake(); else if (!shown && was) schedule();
     }
   });

@@ -10,7 +10,7 @@ title: 在 DeepSeek Harness 中使用 ThoughtDAG
 
 前提：已安装并配置 DeepSeek Harness **0.1.2-rc.1 或更新版本**，使用 Node.js **22.19+（22.x）或 24+**。
 
-**桌面版 Harness**（0.2.0-rc.2 起）：打开「插件」页，在列表里搜索 `dsh-thoughtdag`，点安装。装完**重启一次 Harness**，插件在启动时加载。之后窗口顶部中间偏右多一个「对话 | 思维图」开关，切到思维图就是画布。
+**桌面版 Harness**（0.2.0-rc.2 起）：打开「插件」页，在列表里搜索 `dsh-thoughtdag`，点安装。装完**重启一次 Harness**，插件在启动时加载。之后侧栏「插件」下面多一行 **ThoughtDAG**，点它画布在主栏打开；回到对话点侧栏里的任一会话。
 
 **网页版**用命令行：
 
@@ -19,7 +19,7 @@ dsh plugin --profile web add dsh-thoughtdag
 dsh web
 ```
 
-打开 `dsh web` 输出的地址，在聊天顶部选择 **思维图**。需要返回聊天时，选择 **对话**。
+打开 `dsh web` 输出的地址，在侧栏选择 **ThoughtDAG**。需要返回聊天时，点侧栏里的会话。
 
 **刚发布的版本要点名安装。** `dsh plugin` 底层运行 pnpm，pnpm 默认压住发布不满 24 小时的版本，桌面版和网页版都一样：插件列表里看得到新版本号，不点名却会装到前一天的版本。想在发版当天装到新版，直接写版本号：桌面版在添加插件处输入 `dsh-thoughtdag@<版本号>`，网页版 `dsh plugin --profile web add dsh-thoughtdag@<版本号>`（桌面版的配置名是 `desktop`，同一条命令换成 `--profile desktop` 也能从命令行给桌面版装）。每个 Release 的 GitHub 资产里也附带插件文件 `dsh-thoughtdag-<版本>.tgz`，同一条命令接受这个文件的链接或本地路径。
 
@@ -45,7 +45,7 @@ dsh web
 
 <video controls playsinline muted preload="metadata" src="/media/harness-user-take-zh.mp4" style="width:100%;border-radius:8px" aria-label="在 Harness 中切换思维图、继续追问并选文探索"></video>
 
-1. 在 Harness 顶部从 **对话** 切换到 **思维图**，打开已有节点。
+1. 在 Harness 侧栏点 **ThoughtDAG**，打开已有节点。
 2. 双击第一个问答节点，在右侧面板阅读完整回答。
 3. 在面板下方输入追问并发送。回答会形成第二个节点，与上一节点相连。
 4. 在第二个回答中选中想深入了解的文字，选择 **探索**。
@@ -87,7 +87,7 @@ dsh web
 
 | 问题 | 先检查什么 |
 |---|---|
-| 顶部没有“思维图” | 桌面版：安装后重启 Harness，并确认 Harness 不低于 0.2.0-rc.2。网页版：是否使用 `--profile web` 安装；安装后重新启动 `dsh web` 并刷新页面；检查 Harness 版本与启动日志 |
+| 侧栏没有 ThoughtDAG | 桌面版：安装后重启 Harness，并确认 Harness 不低于 0.2.0-rc.2，侧栏入口需要这个版本的面板槽。网页版：是否使用 `--profile web` 安装；安装后重新启动 `dsh web` 并刷新页面；检查 Harness 版本与启动日志 |
 | 插件列表显示新版本，装上却是旧版本 | pnpm 的 24 小时保护，见「安装」一节，点名版本号安装 |
 | 看不到预期模型 | Harness 中是否已配置相应模型和凭证 |
 | 节点有回答，但 Harness 日志没有新轮次 | 是否选择了普通模型；需要日志与工具执行时选择 Agent 方式 |

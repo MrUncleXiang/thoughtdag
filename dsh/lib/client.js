@@ -133,16 +133,19 @@ window.__ModuleLoader__.load({
         if (el.parentElement) pageObserver.observe(el.parentElement)
         syncCurrent()
         // no band: the host's own column is the canvas's edge; the SPA shows its own switch
-        send('td:view', { shown: true, bar: false, desktop: desktop() })
-        window.setTimeout(() => { if (pageEl) { syncCurrent(); send('td:view', { shown: true, bar: false, desktop: desktop() }) } }, 400)
+        send('td:view', { shown: true, bar: false, desktop: desktop(), panel: true })
+        window.setTimeout(() => { if (pageEl) { syncCurrent(); send('td:view', { shown: true, bar: false, desktop: desktop(), panel: true }) } }, 400)
       }
       const closePanel = () => {
         pageEl = null
         pageObserver?.disconnect()
         pageObserver = null
         overlay.hidden = true
-        send('td:view', { shown: false, bar: false, desktop: desktop() })
+        send('td:view', { shown: false, bar: false, desktop: desktop(), panel: true })
       }
+      // set once the host has declared the panel slots and taken our entries; a
+      // host that never declares them (older harnesses) gets the fallback below
+      let registered = false
       if (React && ctx.slots && ctx.layout && ctx.locale && typeof ctx.effect === 'function') {
         try {
           const h = React.createElement
@@ -160,10 +163,10 @@ window.__ModuleLoader__.load({
             }, [])
             return h('div', { ref, className: 'dsh-td-page', 'data-td-page': '' })
           }
-          ctx.effect(() => ctx.locale.register(NS, { zh: { panel: '思维图' }, en: { panel: 'Thought graph' } }), 'dsh-thoughtdag: dictionaries')
+          ctx.effect(() => ctx.locale.register(NS, { zh: { panel: 'ThoughtDAG' }, en: { panel: 'ThoughtDAG' } }), 'dsh-thoughtdag: dictionaries')
           const t = ctx.locale.bind(NS)
           ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, locale: NS, inject: () => ({}) }, PanelPage))
-          ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 30, locale: NS, label: () => t('panel') }, PanelIcon))
+          ctx.slots.inject('sidebar.panellist', () => { const dispose = ctx.slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 30, locale: NS, label: () => t('panel') }, PanelIcon); registered = true; return dispose })
           panelMode = true
         } catch (error) {
           console.warn('[dsh-thoughtdag] panel entry unavailable, using the floating switch:', error)
@@ -199,13 +202,22 @@ window.__ModuleLoader__.load({
         // let the SPA boot, then re-sync so its listener is ready
         window.setTimeout(() => { syncCurrent(); showBand() }, 400)
       }
-      if (!panelMode) {
+      let fallbackOn = false
+      const enableFallback = () => {
+        if (fallbackOn) return
+        fallbackOn = true
+        panelMode = false
         switchEl.hidden = false
         window.addEventListener('resize', () => { if (!overlay.hidden) showBand() })
         bar.querySelector('[data-view="dialog"]').addEventListener('click', closeFallback)
         mapBtn.addEventListener('click', openFallback)
         dialogBtn.addEventListener('click', closeFallback)
       }
+      if (!panelMode) enableFallback()
+      // the slot system takes registrations only once the host declares the
+      // slot; a host that has not declared sidebar.panellist within a moment
+      // of our apply has no panel list at all, so the floating switch returns
+      else window.setTimeout(() => { if (!registered) { console.warn('[dsh-thoughtdag] no sidebar panel list on this host, using the floating switch'); enableFallback() } }, 2500)
 
       // back to the conversation: the host's own navigation in panel mode, the overlay's close otherwise
       const close = () => { if (panelMode) { try { ctx.layout.selectPanel(null) } catch { closePanel() } } else closeFallback() }
@@ -232,7 +244,7 @@ window.__ModuleLoader__.load({
           // the SPA has booted and shows its own switch: in fallback mode the pill steps aside
           spaReady = true
           if (!panelMode && !overlay.hidden) { switchEl.hidden = true; showBand() }
-          if (panelMode && pageEl) send('td:view', { shown: true, bar: false, desktop: desktop() })
+          if (panelMode && pageEl) send('td:view', { shown: true, bar: false, desktop: desktop(), panel: true })
           return syncCurrent()
         }
         // the canvas names its project: the band shows it (fallback mode only)

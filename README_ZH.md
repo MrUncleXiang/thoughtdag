@@ -54,7 +54,7 @@ npx thoughtdag topics                       # 查看本地索引中的主题
 
 ## 在 DeepSeek Harness 里使用
 
-在 Harness 内切换对话与思维图：用画布选择上下文，再由 Harness 执行下一轮。
+在 Harness 侧栏打开 ThoughtDAG：用画布选择上下文，再由 Harness 执行下一轮。
 
 桌面版 Harness（0.2.0-rc.2 起）：打开「插件」页，搜索 `dsh-thoughtdag` 安装，装完重启 Harness。刚发布的版本要写明版本号 `dsh-thoughtdag@<版本号>`（pnpm 默认压住发布不满 24 小时的版本）。网页版用命令行：
 
@@ -213,6 +213,8 @@ npm run dev       # 前端 :5173
 <a href="https://github.com/Pireirik" title="@Pireirik"><img src="https://github.com/Pireirik.png?size=80" width="40" height="40" alt="@Pireirik" /></a>
 <a href="https://github.com/suhyungJang" title="@suhyungJang"><img src="https://github.com/suhyungJang.png?size=80" width="40" height="40" alt="@suhyungJang" /></a>
 <a href="https://github.com/Heizaillica469" title="@Heizaillica469"><img src="https://github.com/Heizaillica469.png?size=80" width="40" height="40" alt="@Heizaillica469" /></a>
+<a href="https://github.com/orphiczhou" title="@orphiczhou"><img src="https://github.com/orphiczhou.png?size=80" width="40" height="40" alt="@orphiczhou" /></a>
+<a href="https://github.com/Archiloss" title="@Archiloss"><img src="https://github.com/Archiloss.png?size=80" width="40" height="40" alt="@Archiloss" /></a>
 
 欢迎参与贡献，从 [CONTRIBUTING_ZH.md](./CONTRIBUTING_ZH.md) 开始。
 

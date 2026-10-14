@@ -13,20 +13,21 @@ plugin (a Cordis plugin distributed as an npm package), built on the same shell
 pattern as [dsh-synapse](https://github.com/liangmianya/dsh-synapse): the host
 half mounts the ThoughtDAG SPA under `/thoughtdag/` on the EXISTING harness
 web server (no second process, no second port), and the client half adds a
-floating "对话 | 思维图" switch at the top of the harness page that shows the
-canvas in a same-origin full-screen iframe.
+**ThoughtDAG** entry to the harness sidebar (beside Plugins) that shows the
+canvas in the main column, in a same-origin iframe.
 
-> The switch floats over the chat, so it is there before any session is
-> open; while the canvas is up, the same switch sits in the canvas's own top
-> bar next to the canvas chip, so it never covers the canvas toolbar. (开关浮
-> 在对话页顶部，空态也能切换；思维图打开时，同一个开关在画布顶栏「画布名」右侧，
-> 不再压住画布工具栏。0.4.18 曾把它放进会话标题栏，0.4.19 撤回。)
+> The entry is the host's own panel mechanism (`sidebar.panellist` plus the
+> root `main` panel slot), so it is there before any session is open and
+> follows the host's language and theme. The iframe stays in the plugin's own
+> layer, laid over the panel while it is selected, so switching never reloads
+> the canvas. (0.4.19 to 0.5.18 floated a 对话 | 思维图 switch over the top
+> strip instead; every placement collided with host chrome somewhere, see
+> #55, #61, #63, #73. Hosts without the panel slot still get that switch.)
 
 ## What works
 
 - `dsh plugin --profile web add dsh-thoughtdag` installs the plugin from npm; every GitHub release also carries `dsh-thoughtdag-<version>.tgz`, and the same command takes that file's URL (`dsh plugin` forwards to pnpm)
-- The harness GUI gains a floating "对话 | 思维图" switch at the top of the page;
-  "思维图" opens ThoughtDAG at
+- The harness sidebar gains a **ThoughtDAG** entry; selecting it opens ThoughtDAG at
   `/thoughtdag/` (same origin — no CORS, no second server)
 - The host serves the SPA plus a read-only session bridge:
 
@@ -57,8 +58,8 @@ canvas in a same-origin full-screen iframe.
 - installed into the local `web` profile via `dsh plugin --profile web add <dir>`
 - a fresh web-profile boot serves `/thoughtdag/` (SPA) and the bridge API; the
   index injection table lists `dsh-thoughtdag/client.js`
-- headless-browser walk: the "对话 | 思维图" switch floats at the top of the page, the full-screen
-  same-origin iframe opens, and ThoughtDAG boots inside it
+- headless-browser walk: the ThoughtDAG entry appears in the sidebar, selecting it lays the
+  same-origin iframe over the main column, and ThoughtDAG boots inside it
 - fetching the bridge from INSIDE the thoughtdag origin works with no extra
   auth: `GET /thoughtdag/api/disksessions` lists every on-disk session (new
   sessions created by the running instance appear automatically) and
@@ -106,7 +107,7 @@ Both are on by default; `whyTools: false` / `whyPrompt: false` in the plugin con
 - Canvas why panel (a node's file → its history through `/thoughtdag/api`)
 - Canvas UI for the write bridge: name a fork point on a node, hand a compiled context to `inject`, continue with `followup`; the client already switches the chat to a session the canvas names (`td:select-session`)
 - `replace`: shadow a surface range from the canvas (DSH's compaction primitive); needs a live check of how the chat renders a replaced range
-- Theme and language sync with the harness UI
+- Theme sync of the canvas itself with the harness UI (the sidebar entry already follows the host's language and theme)
 - Open the chat's current session on the canvas automatically when the view switches
 
 ## Development

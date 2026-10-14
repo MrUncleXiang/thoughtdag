@@ -13,7 +13,9 @@ export default function HarnessViewSwitch() {
   const t = useT();
   // the desktop host's title band carries this switch itself; the canvas shows its own only in a browser tab
   const hostBar = useUiStore((st) => !!st.harnessHost?.bar);
-  if (!IN_HARNESS_FRAME || hostBar) return null;
+  // the host's sidebar carries the ThoughtDAG entry and its own way back (any session): no switch here
+  const hostPanel = useUiStore((st) => !!st.harnessHost?.panel);
+  if (!IN_HARNESS_FRAME || hostBar || hostPanel) return null;
   const close = () => window.parent.postMessage({ source: 'dsh-thoughtdag', type: 'td:close' }, window.location.origin);
   return (
     <div className="bg-card/90 backdrop-blur border border-line rounded-xl p-0.5 shadow-sm flex items-center" role="group" aria-label="view switch" data-harness-view-switch>
