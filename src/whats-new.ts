@@ -39,6 +39,24 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.5.19',
+    date: '2026-10-14',
+    announce: true,
+    lead: {
+      zh: '🧭 Harness 插件：ThoughtDAG 进了宿主侧栏。开关不再浮在顶条上，侧栏「插件」下面一行 ThoughtDAG，点开画布在主栏，三端一样。',
+      en: '🧭 Harness plugin: ThoughtDAG moves into the host\'s sidebar. No floating switch over the top strip any more; a ThoughtDAG row under Plugins opens the canvas in the main column, the same on every platform.',
+    },
+    items: [
+      {
+        title: { zh: '🧭 侧栏入口', en: '🧭 The sidebar entry' },
+        body: {
+          zh: '插件用的是宿主给「插件」「自动化任务」的同一套机制：侧栏一行 ThoughtDAG，画布在主栏打开，回对话点侧栏里的任一会话。标签随宿主语言，样式随宿主主题，右侧文档预览可以和画布并排，侧栏收起画布跟着扩。画布里那对「对话 | 思维图」按钮去掉了。需要 Harness 0.2.0-rc.2 或更新，老版本宿主退回原来的浮动开关。感谢 @yoczhang、@orphiczhou、@Archiloss 在 #55、#61、#63、#73 里把浮动开关的每一处碰撞都量了出来。',
+          en: 'The plugin now uses the mechanism the host gives its own Plugins and Scheduled tasks pages: a ThoughtDAG row in the sidebar, the canvas in the main column, and any session in the sidebar to return to the chat. The label follows the host\'s language and the row its theme; the right-side document preview sits beside the canvas, and the canvas widens when the sidebar collapses. The Chat | Thought graph pair inside the canvas is gone. Needs Harness 0.2.0-rc.2 or later; older hosts fall back to the floating switch. Thanks to @yoczhang, @orphiczhou and @Archiloss for measuring every collision of the floating switch in #55, #61, #63 and #73.',
+        },
+      },
+    ],
+  },
+  {
     // a quiet release: the 0.5.17 entry stays the announcement, this one is history only
     version: '0.5.18',
     date: '2026-10-12',
