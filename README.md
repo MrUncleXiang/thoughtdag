@@ -13,6 +13,8 @@ Explore a side question, connect useful paths, and choose what the model sees ne
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+<a href="https://trendshift.io/repositories/89640?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-89640" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/89640/daily?language=TypeScript" alt="chenxiachan/thoughtdag | Trendshift" width="250" height="55"/></a>
+
 </div>
 
 [0.5 update](#new-in-05--thoughtdag--jev) · [CLI](#find-past-context-from-the-command-line) · [Harness](#inside-deepseek-harness) · [Desktop](#the-desktop-app) · [How it works](#the-one-rule) · [How it differs](#how-thoughtdag-differs) · [Research](#-research-why-editable-context-matters)

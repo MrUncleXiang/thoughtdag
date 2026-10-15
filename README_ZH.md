@@ -13,6 +13,8 @@
 
 ![License](https://img.shields.io/badge/许可-MIT-green)
 
+<a href="https://trendshift.io/repositories/89640?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-89640" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/89640/daily?language=TypeScript" alt="chenxiachan/thoughtdag | Trendshift" width="250" height="55"/></a>
+
 </div>
 
 [0.5 更新](#05-更新--thoughtdag--jev) · [CLI](#从命令行找回历史上下文) · [Harness](#在-deepseek-harness-里使用) · [桌面版](#桌面版) · [连线规则](#唯一法则) · [产品对比](#与其他工具有什么不同) · [研究](#-研究为什么上下文需要可编辑)
