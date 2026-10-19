@@ -39,6 +39,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a quiet release: the 0.5.19 entry stays the announcement, this one is history only
+    version: '0.5.20',
+    date: '2026-10-19',
+    announce: false,
+    lead: {
+      zh: '回答里的 mermaid 代码块在侧栏、阅读器和全屏查看里画成图；画布上的节点卡显示固定高度的占位，卡片高度不变（#76）。导入的 Agent 会话里，工具调用记录改成一块执行记录交给模型，写明那一轮已经执行过、本对话没有工具，普通模型不再接着写工具调用标记或编造执行结果；回答里仍有写成文字的调用时，折成一行说明，插件里可以交给同一模型的 Agent 重跑（#74）。',
+      en: 'Mermaid code blocks in an answer draw as diagrams in the side panel, the reader and the full-screen view; canvas cards show a fixed-height stand-in and keep their height (#76). In imported agent sessions, tool steps reach the model as one execution record that says the turn already ran and this conversation has no tools, so a plain model no longer writes the next tool call as markup or makes up its results; a call still written as text folds to one line, and inside the plugin the node can be rerun as the same model\'s agent (#74).',
+    },
+    items: [],
+  },
+  {
     version: '0.5.19',
     date: '2026-10-14',
     announce: true,
