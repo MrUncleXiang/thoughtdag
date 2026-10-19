@@ -1,10 +1,10 @@
 import type { StoreApi } from 'zustand';
 import { walkUpAncestors } from '../lib/graph';
-import { upstreamFingerprint, upstreamParts, recordParts, type MessageSource } from './context-builder';
+import { upstreamFingerprint, upstreamParts, recordParts, recordsForAgent, type MessageSource } from './context-builder';
 import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
 import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
-import { harnessOutbound, claimHarnessTurn, stampHarnessTurn } from '../lib/atlas/dsh-bridge';
+import { harnessOutbound, claimHarnessTurn, stampHarnessTurn, isHarnessAgentModel } from '../lib/atlas/dsh-bridge';
 import { agentOutbound, adoptAgentTurn, claimAgentTurn, isAgentModel } from '../lib/agents/agent-runtime';
 import { countTokens, activeSummary } from '../utils';
 import { toast, useUiStore } from '../lib/ui-store';
@@ -292,6 +292,9 @@ export async function runNodeGeneration(
       messages = [...messages.slice(0, at), block, ...messages.slice(at)];
     }
   }
+
+  // execution records tell a plain model it has no tools; an agent has them
+  if (isAgentModel(requestedModel) || isHarnessAgentModel(requestedModel)) messages = recordsForAgent(messages);
 
   try {
     // Context budget: browser-configured models carry their probed window.

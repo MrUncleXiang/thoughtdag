@@ -31,6 +31,7 @@ import { levelText } from '../lib/ladder-core';
 import { usePlaqueClip } from '../lib/use-plaque-clip';
 import { ApprovalCard } from './ui/ApprovalCard';
 import { AgentTrace } from './ui/AgentTrace';
+import { AgentRerunButton } from './ui/AgentRerunButton';
 import { SquareTerminal } from 'lucide-react';
 import { useT, fmt } from '../i18n';
 import MentionSurface from './ui/NodeMention';
@@ -751,7 +752,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               className="question-md markdown-body text-sm text-ink font-semibold mb-3 cursor-pointer hover:bg-wash rounded-xl px-2 py-1.5 -mx-1 transition-colors max-h-[180px] overflow-y-auto nowheel nopan"
             >
               {/* a question is markdown like an answer (lists, code, emphasis), set compact; the plaques above keep the plain text */}
-              <Markdown>{data.question}</Markdown>
+              <Markdown diagrams="placeholder">{data.question}</Markdown>
             </div>
           )}
 
@@ -866,9 +867,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
               className="markdown-body text-sm text-ink leading-relaxed max-h-[400px] overflow-y-auto cursor-text nopan nodrag nowheel px-3 py-2.5 bg-surface rounded-xl"
             >
               {highlightedTexts.size > 0 || exploreSpecs.length > 0 ? (
-                <HighlightedMarkdown content={data.response} highlights={highlightedTexts} exploreMarks={exploreSpecs} />
+                <HighlightedMarkdown content={data.response} highlights={highlightedTexts} exploreMarks={exploreSpecs} diagrams="placeholder" />
               ) : (
-                <Markdown base={data.importSource?.cwd}>{data.response}</Markdown>
+                <Markdown base={data.importSource?.cwd} diagrams="placeholder">{data.response}</Markdown>
               )}
             </div>
             </>
@@ -945,6 +946,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
                   <Pencil size={13} strokeWidth={1.75} />
                 </button>
               )}
+              <AgentRerunButton nodeId={id} data={data} />
               {data.focusRole === 'ctx' && (
                 <span className="w-[7px] h-[7px] rounded-full bg-accent inline-block ml-1 shrink-0" title={t('focus.inContext')} data-focus-dot />
               )}

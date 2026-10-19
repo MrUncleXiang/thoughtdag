@@ -1,5 +1,5 @@
-import { createContext, memo, useContext, useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { createContext, memo, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import ReactMarkdown, { type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
@@ -7,11 +7,14 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import type { Schema } from 'hast-util-sanitize';
+import type { Element, ElementContent } from 'hast';
 import type { PluggableList } from 'unified';
-import { Check, Copy } from 'lucide-react';
+import { Check, Code2, Copy, Workflow } from 'lucide-react';
 import { fuzzyHighlightRegex } from '../lib/highlight-match';
-import { useT } from '../i18n';
+import { useT, fmt } from '../i18n';
 import { localPathOf, openLocalPath, basenameOf } from '../lib/local-path';
+import { foldToolCalls } from '../lib/tool-markup';
+import { useAppearance } from '../lib/appearance';
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath];
 
@@ -51,7 +54,7 @@ const REHYPE_PLUGINS: PluggableList = [rehypeRaw, [rehypeSanitize, SANITIZE_SCHE
 
 // Code blocks get a hover copy button (no toast: too frequent an action —
 // the icon flashes a check instead).
-function Pre(props: React.HTMLAttributes<HTMLPreElement>) {
+function CodePre(props: React.HTMLAttributes<HTMLPreElement>) {
   const ref = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const t = useT();
@@ -72,6 +75,86 @@ function Pre(props: React.HTMLAttributes<HTMLPreElement>) {
       </button>
     </div>
   );
+}
+
+// A ```mermaid block is drawn where there is room to read it (panel,
+// reader, viewer). A canvas card draws a fixed-height stand-in instead:
+// the card's height is what layout spaced the nodes below by, and a
+// diagram arriving after the first paint would grow the card into them.
+type DiagramMode = 'render' | 'placeholder';
+const DiagramContext = createContext<DiagramMode>('render');
+
+const textOf = (n: ElementContent): string => (n.type === 'text' ? n.value : 'children' in n ? n.children.map(textOf).join('') : '');
+
+function mermaidSource(pre: Element | undefined): string | null {
+  const code = pre?.children.find((c): c is Element => c.type === 'element' && c.tagName === 'code');
+  const cls = code?.properties?.className;
+  if (!code || !Array.isArray(cls) || !cls.includes('language-mermaid')) return null;
+  return textOf(code);
+}
+
+// mermaid is large: fetched the first time a diagram is drawn, never on a canvas that has none
+let mermaidLoad: Promise<typeof import('mermaid').default> | null = null;
+const loadMermaid = () => (mermaidLoad ??= import('mermaid').then((m) => m.default));
+let mermaidSeq = 0;
+
+function MermaidBlock({ code, source }: { code: string; source: ReactNode }) {
+  const t = useT();
+  const theme = useAppearance((s) => s.resolved);
+  const [svg, setSvg] = useState<string | null>(null);
+  const [showSource, setShowSource] = useState(false);
+  useEffect(() => {
+    let live = true;
+    // a streaming answer re-renders on every chunk: draw once the text settles;
+    // until it parses (a half-written block), the source shows
+    const timer = setTimeout(() => {
+      void loadMermaid()
+        .then(async (mermaid) => {
+          // strict: labels are sanitized and the diagram carries no click handlers or scripts
+          mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme === 'dark' ? 'dark' : 'neutral' });
+          if (!(await mermaid.parse(code, { suppressErrors: true }))) { if (live) setSvg(null); return; }
+          const out = await mermaid.render(`td-mermaid-${++mermaidSeq}`, code);
+          if (live) setSvg(out.svg);
+        })
+        .catch(() => { if (live) setSvg(null); });
+    }, 250);
+    return () => { live = false; clearTimeout(timer); };
+  }, [code, theme]);
+  const toggle = svg && (
+    <button
+      onClick={(e) => { e.stopPropagation(); setShowSource((v) => !v); }}
+      title={showSource ? t('md.diagramView') : t('md.diagramSource')}
+      className={`absolute top-1.5 ${showSource ? 'right-9' : 'right-1.5'} w-6 h-6 rounded-md bg-card/90 border border-line text-ink-faint hover:text-accent flex items-center justify-center opacity-0 group-hover/diagram:opacity-100 transition-opacity nodrag nopan`}
+      data-diagram-toggle
+    >
+      {showSource ? <Workflow size={12} strokeWidth={1.75} /> : <Code2 size={12} strokeWidth={1.75} />}
+    </button>
+  );
+  return (
+    <div className="relative group/diagram">
+      {svg && !showSource
+        ? <div className="my-2 overflow-x-auto flex justify-center [&_svg]:max-w-full [&_svg]:h-auto" data-diagram dangerouslySetInnerHTML={{ __html: svg }} />
+        : source}
+      {toggle}
+    </div>
+  );
+}
+
+function DiagramPlaceholder() {
+  const t = useT();
+  return (
+    <div className="h-12 my-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-xs text-ink-faint select-none" data-diagram-placeholder>
+      <Workflow size={13} strokeWidth={1.75} /> {t('md.diagramPlaceholder')}
+    </div>
+  );
+}
+
+function Pre({ node, ...props }: React.HTMLAttributes<HTMLPreElement> & ExtraProps) {
+  const mode = useContext(DiagramContext);
+  const code = mermaidSource(node);
+  if (code === null) return <CodePre {...props} />;
+  if (mode === 'placeholder') return <DiagramPlaceholder />;
+  return <MermaidBlock code={code} source={<CodePre {...props} />} />;
 }
 
 // Wide tables scroll inside their own container instead of blowing the card
@@ -147,12 +230,17 @@ const COMPONENTS = { pre: Pre, table: Table, a: Anchor, img: Img };
 // memo: the unified parse + KaTeX layout is the most expensive render on a
 // card, and cards re-render far more often than their text changes (every
 // streamed chunk anywhere re-renders every card). Same string → skip.
-export const Markdown = memo(function Markdown({ children, base }: { children: string; base?: string }) {
+export const Markdown = memo(function Markdown({ children, base, diagrams = 'render' }: { children: string; base?: string; diagrams?: DiagramMode }) {
+  const t = useT();
+  // a tool call the model wrote as text did not run: say so in one line instead of showing the markup
+  const text = foldToolCalls(normalizeMath(children), (names) => `\n\n> ⚙ ${fmt(t('md.toolCallFolded'), { names: names.map((n) => `\`${n}\``).join(', ') || '?' })}\n\n`);
   return (
     <BaseContext.Provider value={base}>
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={COMPONENTS}>
-        {normalizeMath(children)}
-      </ReactMarkdown>
+      <DiagramContext.Provider value={diagrams}>
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={COMPONENTS}>
+          {text}
+        </ReactMarkdown>
+      </DiagramContext.Provider>
     </BaseContext.Provider>
   );
 });
@@ -198,7 +286,7 @@ export interface ExploreMarkSpec { text: string; nodeId: string; title: string }
 // Markdown with user highlights (and explore traces) wrapped in <mark>
 // before rendering. Callers rebuild the Set/array props every render, so
 // memo compares by CONTENT (see areMarkPropsEqual below).
-export const HighlightedMarkdown = memo(function HighlightedMarkdown({ content, highlights, exploreMarks }: { content: string; highlights: Set<string>; exploreMarks?: ExploreMarkSpec[] }) {
+export const HighlightedMarkdown = memo(function HighlightedMarkdown({ content, highlights, exploreMarks, diagrams }: HMProps) {
   // Fuzzy-locate every span in the CLEAN markdown source first, then splice
   // tags in back-to-front. A second replace pass over already-tagged text
   // would let the fuzzy noise classes swallow pieces of the inserted tags
@@ -231,12 +319,12 @@ export const HighlightedMarkdown = memo(function HighlightedMarkdown({ content, 
   for (const s of kept) {
     processed = processed.slice(0, s.start) + wrapMatch(processed.slice(s.start, s.end), s.open) + processed.slice(s.end);
   }
-  return <Markdown>{processed}</Markdown>;
+  return <Markdown diagrams={diagrams}>{processed}</Markdown>;
 }, areMarkPropsEqual);
 
-type HMProps = { content: string; highlights: Set<string>; exploreMarks?: ExploreMarkSpec[] };
+type HMProps = { content: string; highlights: Set<string>; exploreMarks?: ExploreMarkSpec[]; diagrams?: DiagramMode };
 function areMarkPropsEqual(prev: HMProps, next: HMProps): boolean {
-  if (prev.content !== next.content) return false;
+  if (prev.content !== next.content || prev.diagrams !== next.diagrams) return false;
   if (prev.highlights.size !== next.highlights.size) return false;
   for (const h of prev.highlights) if (!next.highlights.has(h)) return false;
   const a = prev.exploreMarks ?? [];

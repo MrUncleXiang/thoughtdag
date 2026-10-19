@@ -12,6 +12,7 @@ import { collectExploreMarksKey, type ExploreMark } from '../../lib/explore-mark
 import ReasoningDisclosure from '../ui/ReasoningDisclosure';
 import { ApprovalCard, DecisionsDisclosure } from '../ui/ApprovalCard';
 import { AgentTrace } from '../ui/AgentTrace';
+import { AgentRerunButton } from '../ui/AgentRerunButton';
 import type { ThoughtData } from '../../types';
 
 export default function ResponseSection({
@@ -275,6 +276,7 @@ export default function ResponseSection({
               <Pencil size={14} strokeWidth={1.75} />
             </button>
           )}
+          <AgentRerunButton nodeId={nodeId} data={data} size="md" />
           {(data.generatedBy?.[data.responseIndex]) && (
             <span
               className="text-2xs text-ink-faint font-mono ml-1 truncate flex-1 min-w-0 max-w-[420px]"

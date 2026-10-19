@@ -1,4 +1,4 @@
-import type { ThoughtNode } from '../types';
+import type { Attachment, ThoughtNode } from '../types';
 import type { ThoughtEdge } from '../types';
 import { partitionContext, type ContextReference } from '../lib/graph';
 import { attachmentFingerprint } from '../lib/attachments';
@@ -23,6 +23,9 @@ export interface MessageSource {
   layer: 'system' | 'material' | 'reference' | 'chain' | 'branch';
   nodeId?: string;
   attachmentId?: string;
+  /** a message several attachments render into together (a turn's
+   *  execution record): every one of them, attachmentId being the first */
+  attachmentIds?: string[];
   /** reference blocks: the referenced (dashed-edge source) node */
   refSourceId?: string;
   part?: 'role' | 'attachment' | 'question' | 'response' | 'reference' | 'passage';
@@ -92,6 +95,58 @@ export function referenceBlockContent(ref: ContextReference): string {
   return lines.join('\n');
 }
 
+// An imported agent turn keeps each tool step as an attachment reading
+// `[call] <arguments>\n[result]\n<output>` (adapters/shared.ts). Sent in
+// that shape, the steps read as a transcript to continue: a model without
+// tools writes the next call as text (DeepSeek's DSML, other models' XML)
+// or copies the shape with results it never saw (#74). One fenced record
+// per turn says what the steps were — already run, elsewhere — and keeps
+// every output, so nothing the turn learned is lost.
+// The header has to SAY there are no tools: measured on real sessions
+// (2026-10-19), a header that left it open ("use your own tools if you
+// have them") still drew written calls; this wording drew none. An agent
+// does have tools, so its requests carry the second header instead
+// (recordsForAgent, applied where the route is known).
+const RECORD_HEADER = '[Execution record — an earlier agent turn already ran these tools in its own session. This is a log of what happened there, kept for reference; this conversation has no tools. If the question needs something run or checked, say what to run and why; do not write tool calls, and do not state results you have not seen in the context.]';
+const AGENT_RECORD_HEADER = '[Execution record — an earlier agent turn already ran these tools in its own session. This is a log of what happened there, kept for reference, not a pending call.]';
+
+/** The same context for an agent request: records keep their contents and
+ *  drop the no-tools sentence, which would be false there. */
+export function recordsForAgent(messages: ContextMessage[]): ContextMessage[] {
+  return messages.map((m) => (m.role === 'user' && m.content.startsWith(RECORD_HEADER)
+    ? { ...m, content: AGENT_RECORD_HEADER + m.content.slice(RECORD_HEADER.length) }
+    : m));
+}
+
+const isToolRecord = (att: Attachment): boolean => att.name.startsWith('tool: ') && att.content.startsWith('[call]');
+
+/** A tool call's arguments as one readable line: the field that says what
+ *  ran (command, queries, path, url), else key=value pairs. */
+function recordArgs(call: string): string {
+  let parsed: unknown;
+  try { parsed = JSON.parse(call); } catch { /* truncated or not JSON: the text as recorded */ }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return call.trim();
+  const j = parsed as Record<string, unknown>;
+  const main = j.command ?? j.cmd ?? (Array.isArray(j.queries) ? j.queries.join(' | ') : undefined) ?? j.query ?? j.path ?? j.file_path ?? j.url ?? j.pattern;
+  const args = typeof main === 'string'
+    ? main
+    : Object.entries(j).map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ');
+  return args.trim();
+}
+
+const indent = (s: string, n: number) => s.split('\n').map((l) => ' '.repeat(n) + l).join('\n');
+
+function recordItem(att: Attachment): string {
+  const body = att.content.slice('[call]'.length).replace(/^ /, '');
+  const cut = body.indexOf('\n[result]\n');
+  const call = cut >= 0 ? body.slice(0, cut) : body;
+  const result = (cut >= 0 ? body.slice(cut + '\n[result]\n'.length) : '').trimEnd() || '(no output)';
+  const args = recordArgs(call);
+  const head = `- ${att.name.slice('tool: '.length)}:`;
+  // a script or heredoc keeps its lines; a one-liner stays on the item line
+  return `${args.includes('\n') ? `${head}\n${indent(args, 4)}` : `${head} ${args}`}\n  result:\n${indent(result, 4)}`;
+}
+
 /** Deterministic fingerprint of an assembled context — recorded on each
     generation (provenance seed for the staleness pass). */
 export function hashContext(messages: ContextMessage[], images: ImageAttachment[] = []): string {
@@ -125,7 +180,10 @@ export function upstreamFingerprint(nodeId: string, nodes: ThoughtNode[], edges:
       ...(n.id === nodeId ? { question: '', response: '', attachments: [] } : {}),
     },
   }));
-  const { messages } = buildContext(nodeId, normalized, edges);
+  // tool steps hash in the shape they had before the execution record:
+  // a fingerprint tracks content, and a new rendering of the same steps
+  // must not mark every answer below an imported turn as stale
+  const { messages } = compileContext(nodeId, normalized, edges, 'raw');
   return hashContext(messages);
 }
 
@@ -139,7 +197,7 @@ export function upstreamParts(nodeId: string, nodes: ThoughtNode[], edges: Thoug
     ...n,
     data: { ...n.data, isCollapsed: false, summary: undefined, summaries: undefined, summaryTypes: undefined, generatedBy: undefined, ...(n.id === nodeId ? { question: '', response: '', attachments: [] } : {}) },
   }));
-  const { messages, sources } = buildContext(nodeId, normalized, edges);
+  const { messages, sources } = compileContext(nodeId, normalized, edges, 'raw');
   const byNode = new Map<string, string[]>();
   messages.forEach((m, i) => {
     const uid = sources?.[i]?.nodeId;
@@ -217,6 +275,21 @@ export function buildContext(
       transcript never silently contradicts itself. */
   staleIds?: ReadonlySet<string> | string[],
 ): BuildContextResult {
+  return compileContext(nodeId, nodes, edges, 'record', branchContext, excludedAttachmentIds, includedAttachmentIds, staleIds);
+}
+
+/** buildContext with the tool-step rendering chosen: 'record' is what a
+ *  model receives; 'raw' is the pre-record shape the fingerprints hash. */
+function compileContext(
+  nodeId: string,
+  nodes: ThoughtNode[],
+  edges: ThoughtEdge[],
+  toolSteps: 'record' | 'raw',
+  branchContext?: string,
+  excludedAttachmentIds?: string[],
+  includedAttachmentIds?: string[],
+  staleIds?: ReadonlySet<string> | string[],
+): BuildContextResult {
   const messages: ContextMessage[] = [];
   const images: ImageAttachment[] = [];
   const sources: MessageSource[] = [];
@@ -247,6 +320,7 @@ export function buildContext(
     // the current contents instead of trusting a stale copy
     const pointers = new Map<string, Set<string>>();
     let pointerSource: { id: string } | null = null;
+    const records: Attachment[] = [];
     for (const att of node.data.attachments || []) {
       if (excludeSet.has(att.id)) {
         if (att.op && att.paths?.length) {
@@ -294,10 +368,16 @@ export function buildContext(
             : `[File: ${att.name} — HTML with no extractable text yet]`,
         });
         sources.push(attSource(att));
+      } else if (toolSteps === 'record' && isToolRecord(att)) {
+        records.push(att);
       } else {
         messages.push({ role: 'user', content: `[File: ${att.name}]\n${att.content}` });
         sources.push(attSource(att));
       }
+    }
+    if (records.length > 0) {
+      messages.push({ role: 'user', content: `${RECORD_HEADER}\n${records.map(recordItem).join('\n')}` });
+      sources.push({ ...attSource(records[0]), attachmentIds: records.map((a) => a.id) });
     }
     if (pointers.size > 0 && pointerSource) {
       const parts = [...pointers.entries()].map(([op, set]) => `${op}: ${[...set].join(', ')}`);

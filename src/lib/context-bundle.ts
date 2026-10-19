@@ -212,7 +212,7 @@ export async function compileContextBundle(
       source: { node_id: node.id },
     });
   };
-  built.sources.forEach((s) => collect(s.nodeId, s.attachmentId));
+  built.sources.forEach((s) => (s.attachmentIds ?? [s.attachmentId]).forEach((id) => collect(s.nodeId, id)));
   built.imageSources.forEach((s) => collect(s.nodeId, s.attachmentId));
 
   const references = built.sources
