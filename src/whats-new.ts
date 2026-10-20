@@ -39,6 +39,38 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '0.5.21',
+    date: '2026-10-20',
+    announce: true,
+    lead: {
+      zh: '💬 Agent 的问题在节点上回答，权限用一个开关设定。Harness 插件里的模型也能联网搜索了。',
+      en: '💬 Answer an agent\'s questions on its node, and set its permissions with one switch. Models inside the Harness plugin can now search the web.',
+    },
+    items: [
+      {
+        title: { zh: '💬 在节点上回答 Agent 的问题', en: '💬 Answer the agent on its node' },
+        body: {
+          zh: 'Harness、Claude Code 和 Codex 向你提问时，问题以一张表单出现在节点上：可以单选或多选，能看到每个选项的说明，也可以自己写答案；审阅计划时，计划全文也在卡片里。有问题在等你时，工具栏显示「N 个问题在等你」，点一下回到那个节点；画布缩小时，这个节点保持展开；窗口在后台时会发系统通知。',
+          en: 'When Harness, Claude Code or Codex asks you something, the questions arrive on the node as one form: pick one or several, read what each option means, or write your own answer; a plan under review shows in full on the card. While a question waits, the toolbar shows how many are waiting and takes you to the node in one click; the node stays open when you zoom out, and a system notification appears when the window is in the background.',
+        },
+      },
+      {
+        title: { zh: '🛡 一个权限开关', en: '🛡 One permission switch' },
+        body: {
+          zh: '选了 Agent 模型后，工作目录旁边多了「权限」：每次询问、自动审查、全部放行，每张画布各自记住。菜单写明每一档对当前 Agent 的含义：Claude Code 和 Codex 用它们自己的自动审查；Harness 的设置只对画布发起的那一轮生效，这一轮结束后会话恢复原来的设置。Harness 的审批也可以选「本对话一直允许」，只对完全相同的操作生效。',
+          en: 'With an agent model picked, a Permissions switch sits beside the working directory: Ask, Auto review or Allow all, remembered per canvas. The menu says what each choice means for the agent you picked: Claude Code and Codex use their own auto review; for Harness the choice applies to the turn the canvas starts, and the session returns to its own setting afterwards. A Harness approval can now be allowed for the rest of the session, for that exact step only.',
+        },
+      },
+      {
+        title: { zh: '🔎 联网搜索', en: '🔎 Web search' },
+        body: {
+          zh: 'Harness 插件里，打开联网开关后，Harness 自带的模型通过 Harness 的网页搜索查资料，来源按编号引用；在 Harness 的网页搜索设置里打开新版 Web 搜索 API，每条结果会带摘要。桌面版的搜索引擎可以选 DeepSeek 搜索，用你 DeepSeek 接口的 key，按成功的搜索次数计费。DeepSeek 的 Flash 模型改用新名 deepseek-flash，它可以看图；固定在旧名上的节点会自动改用新名。',
+          en: 'Inside the Harness plugin, with the web switch on, Harness\'s own models search through Harness\'s web search and cite their sources by number; turning on the new Web Search API in Harness\'s web search settings adds an excerpt to each result. The desktop app can use DeepSeek Search as its engine, with your DeepSeek interface\'s key, billed per successful search. DeepSeek\'s Flash model now goes by deepseek-flash and reads images; nodes pinned to the old name move to the new one.',
+        },
+      },
+    ],
+  },
+  {
     // a quiet release: the 0.5.19 entry stays the announcement, this one is history only
     version: '0.5.20',
     date: '2026-10-19',
