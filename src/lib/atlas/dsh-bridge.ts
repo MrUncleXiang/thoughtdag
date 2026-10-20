@@ -336,7 +336,8 @@ async function activeCanvasCwd(): Promise<string | null> {
   } catch { return null; }
 }
 
-type HarnessRoute = { cwd?: string; session?: string; forkSession?: string; forkAnchor?: string };
+/** `permission`: the canvas's mode for this turn (absent = ask, the session as set). */
+type HarnessRoute = { cwd?: string; session?: string; forkSession?: string; forkAnchor?: string; permission?: 'auto' | 'allow' };
 
 /** For the node about to generate: the harness routing for its request, or
  *  undefined when not embedded / not a harness-agent question. A simple
@@ -353,6 +354,9 @@ export async function harnessOutbound(nodeId: string, model: string | undefined)
   // canvas mirrors, then the session the chat shows
   const chosen = projects.find((p) => p.id === activeId)?.agentCwd;
   const cwd = chosen ?? (await activeCanvasCwd()) ?? currentSession?.cwd ?? undefined;
+  // the canvas's permission mode rides along; the plugin applies it to this turn only
+  const mode = projects.find((p) => p.id === activeId)?.agentGuard?.mode;
+  const base = { ...(cwd ? { cwd } : {}), ...(mode === 'auto' || mode === 'allow' ? { permission: mode } : {}) };
   try {
     const { useStore } = await import('../../store');
     const ss = projects.find((p) => p.id === activeId)?.sourceSession;
@@ -368,7 +372,7 @@ export async function harnessOutbound(nodeId: string, model: string | undefined)
         : [];
       const tailEntry = entries.find((e) => e.tailNodeId === parentId);
       if (tailEntry) {
-        return { ...(cwd ? { cwd } : {}), session: tailEntry.sessionId };
+        return { ...base, session: tailEntry.sessionId };
       }
 
       // A historical/non-tail dsh mirror must fork at the parent's OWN turn,
@@ -379,14 +383,14 @@ export async function harnessOutbound(nodeId: string, model: string | undefined)
       const source = parent?.data.importSource;
       if (source?.runner === 'dsh' && source.sessionId && source.itemIds?.[0]) {
         return {
-          ...(cwd ? { cwd } : {}),
+          ...base,
           forkSession: source.sessionId,
           forkAnchor: source.itemIds[0],
         };
       }
     }
   } catch { /* store not ready — fall through to a fresh session */ }
-  return cwd ? { cwd } : {};
+  return base;
 }
 
 type HarnessTurnRef = { session: string; turn: number | null; userMessageId: string | null; seq: number | null };

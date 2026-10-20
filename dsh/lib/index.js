@@ -919,41 +919,150 @@ function toolQuery(name, args) {
 /** sessionId → the canvas turn running in it: its frame emitter, its
  *  close probe, and the tool calls seen so far (callId → name, arguments). */
 const canvasTurns = new Map()
-/** approval id → the resolver waiting for the person's decision */
+/** approval or question id → the resolver waiting for the person's decision */
 const pendingApprovals = new Map()
+/** sessionId → the exact steps the person allowed for the rest of the
+ *  session ("tool name + its arguments"; the harness's own approvals are
+ *  one-shot, so the standing allowance lives here, in memory) */
+const sessionRules = new Map()
 
-const APPROVAL_OUTCOMES = new Set(['allowed-once', 'rejected'])
+const APPROVAL_OUTCOMES = new Set(['allowed-once', 'allowed-session', 'rejected', 'cancelled'])
+
+/** Wait for the person's answer to one canvas card, the canvas stream going
+ *  away, or the harness withdrawing the request — whichever comes first. */
+async function personDecides(id, sessionId, entry, signal, kind) {
+  let clear
+  const decision = new Promise(resolve => { pendingApprovals.set(id, { resolve, sessionId, kind }) })
+  const closed = new Promise(resolve => { const t = setInterval(() => { if (entry.isClosed()) { clearInterval(t); resolve('closed') } }, 500); clear = () => clearInterval(t) })
+  const aborted = new Promise(resolve => {
+    if (!signal) return
+    if (signal.aborted) resolve('aborted')
+    else signal.addEventListener('abort', () => resolve('aborted'), { once: true })
+  })
+  const r = await Promise.race([decision, closed, aborted])
+  pendingApprovals.delete(id)
+  clear?.()
+  return r
+}
+
+// what a step does, without the prose the model writes around it each time
+// (a bash call carries a fresh description and justification on every try)
+const PROSE_ARGS = new Set(['description', 'justification', 'reason', 'rationale', 'explanation', 'summary', 'title'])
+function stepKey(args) {
+  let v = args
+  if (typeof v === 'string') { try { v = JSON.parse(v) } catch { return v } }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return JSON.stringify(v ?? null)
+  return JSON.stringify(Object.fromEntries(Object.keys(v).filter(k => !PROSE_ARGS.has(k)).sort().map(k => [k, v[k]])))
+}
+
+/** The canvas turn a harness request belongs to, or null when it is the
+ *  person's own (another turn of the same session) or no canvas is watching. */
+function canvasTurnOf(agent) {
+  const entry = canvasTurns.get(agent?.id)
+  if (!entry || entry.turn === null || entry.current() !== entry.turn) return null
+  return entry
+}
 
 function installApprovalAnswerer(ctx) {
   ctx.on('approval/request', async function (req, next) {
-    const entry = canvasTurns.get(req?.agent?.id)
-    if (!entry) return next()
     // an approval raised by another turn of the same session (the person's
     // own tool call, running before or after ours) stays with the harness UI
-    if (entry.turn === null || entry.current() !== entry.turn) return next()
+    const entry = canvasTurnOf(req?.agent)
+    if (!entry) return next()
+    const sessionId = req.agent.id
     const id = 'td-' + randomUUID()
     const call = req.callId !== undefined ? entry.calls.get(req.callId) : undefined
     const name = call?.name ?? req.toolName
+    const args = typeof call?.arguments === 'string' ? call.arguments : (call?.arguments ? JSON.stringify(call.arguments) : null)
+    const query = call ? toolQuery(name, call.arguments) : ''
+    // a standing allowance covers exactly this step: same tool, same arguments
+    const rule = call ? `harness:${name}:${stepKey(call.arguments)}` : null
+    if (rule && sessionRules.get(sessionId)?.has(rule)) {
+      entry.emit({ approvalDecided: { id, outcome: 'allowed-session', auto: true, name, query, rule } })
+      return 'allowed-once'
+    }
     entry.emit({ approval: {
       id, toolName: req.toolName, callId: req.callId ?? null, reason: req.reason ?? null,
-      name, query: call ? toolQuery(name, call.arguments) : '', arguments: typeof call?.arguments === 'string' ? call.arguments : (call?.arguments ? JSON.stringify(call.arguments) : null),
+      name, query, arguments: args, ...(rule ? { rule } : {}),
     } })
-    let clear
-    const decision = new Promise(resolve => { pendingApprovals.set(id, { resolve, sessionId: req.agent.id }) })
-    const closed = new Promise(resolve => { const t = setInterval(() => { if (entry.isClosed()) { clearInterval(t); resolve('closed') } }, 500); clear = () => clearInterval(t) })
-    const aborted = new Promise(resolve => {
-      if (!req.signal) return
-      if (req.signal.aborted) resolve('aborted')
-      else req.signal.addEventListener('abort', () => resolve('aborted'), { once: true })
-    })
-    const r = await Promise.race([decision, closed, aborted])
-    pendingApprovals.delete(id)
-    clear?.()
+    const r = await personDecides(id, sessionId, entry, req.signal, 'approval')
     if (r === 'closed') return next()
     const outcome = r === 'aborted' ? 'cancelled' : r
-    entry.emit({ approvalDecided: { id, outcome } })
-    return outcome
+    if (outcome === 'allowed-session' && rule) {
+      if (!sessionRules.has(sessionId)) sessionRules.set(sessionId, new Set())
+      sessionRules.get(sessionId).add(rule)
+    }
+    entry.emit({ approvalDecided: { id, outcome, ...(outcome === 'allowed-session' && rule ? { rule } : {}) } })
+    return outcome === 'allowed-session' ? 'allowed-once' : outcome
   }, true)
+
+  // the agent's own questions (ask_user_question, and plan review on leaving
+  // plan mode): one form on the node, the answers back in the harness's
+  // vocabulary — a skip answers every question with nothing picked
+  ctx.on('user-questions/request', async function (req, next) {
+    const entry = canvasTurnOf(req?.agent)
+    if (!entry) return next()
+    const questions = (Array.isArray(req.questions) ? req.questions : []).filter(q => q && typeof q.id === 'string').map(q => ({
+      id: q.id, question: String(q.question ?? ''),
+      ...(typeof q.header === 'string' ? { header: q.header } : {}),
+      ...(typeof q.detail === 'string' ? { detail: q.detail } : {}),
+      options: (Array.isArray(q.options) ? q.options : []).filter(o => o && typeof o.label === 'string').map(o => ({ label: o.label, ...(typeof o.description === 'string' ? { description: o.description } : {}) })),
+      multiSelect: !!q.multiSelect, custom: true,
+    }))
+    if (questions.length === 0) return next()
+    const id = 'td-' + randomUUID()
+    entry.emit({ approval: {
+      id, kind: 'form', toolName: 'ask_user_question', callId: req.callId ?? null, reason: null,
+      name: 'ask_user_question', query: questions.map(q => q.question).join('\n'), arguments: null, questions,
+    } })
+    const r = await personDecides(id, req.agent.id, entry, req.signal, 'form')
+    if (r === 'closed') return next()
+    if (r === 'aborted') { entry.emit({ approvalDecided: { id, outcome: 'cancelled' } }); throw new Error('the question was withdrawn') }
+    const given = r !== 'cancelled' && Array.isArray(r?.answers) ? r.answers : []
+    const answers = questions.map((q) => {
+      const a = given.find(x => x && x.id === q.id)
+      const selected = Array.isArray(a?.selected) ? a.selected.filter(x => typeof x === 'string' && q.options.some(o => o.label === x)) : []
+      const custom = typeof a?.custom === 'string' && a.custom.trim() ? a.custom.trim() : undefined
+      return { id: q.id, selected, ...(custom !== undefined ? { custom } : {}) }
+    })
+    const shown = answers.filter(a => a.selected.length || a.custom).map(a => `${questions.find(q => q.id === a.id)?.header ?? a.id} → ${[...a.selected, ...(a.custom ? [a.custom] : [])].join(', ')}`).join('; ')
+    entry.emit({ approvalDecided: { id, outcome: given.length ? 'answered' : 'cancelled', value: shown || null } })
+    return { answers }
+  }, true)
+}
+
+// ── the canvas's permission mode, for the turns it starts ───────────────
+// The canvas has one switch for every agent it runs (ask / auto / allow).
+// Here it maps onto the harness's own permission presets: 'auto' is its
+// Auto review (present when the person installed that integration),
+// 'allow' is full access; 'ask' leaves the session as the person set it.
+// The preset is switched for the canvas's turn only and switched back when
+// the turn ends, so the session keeps its own setting in the harness.
+const CANVAS_PRESETS = { auto: 'auto', allow: 'danger-full-access' }
+let permissionPresets = null
+
+/** Apply the canvas's mode to one turn; returns the undo, or null. */
+function canvasPermission(ctx, agent, mode, emit) {
+  const want = CANVAS_PRESETS[mode]
+  if (!want) return null
+  const presets = permissionPresets
+  const session = agent?.session
+  const report = (applied, reason) => emit({ permission: { mode, applied, ...(reason ? { reason } : {}) } })
+  if (!presets || !session) { report(false, 'unavailable'); return null }
+  try {
+    if (!presets.names.includes(want)) { report(false, 'unavailable'); return null }
+    const before = presets.current(session)
+    if (before === want) { report(true); return null }
+    // a hand-tuned mix of sandbox and approval has no preset to come back to
+    if (before === 'custom') { report(false, 'custom'); return null }
+    const set = (name) => presets.apply(session, name, (policy) => ctx.approval.setPolicy(agent, policy))
+    set(want)
+    report(true)
+    return () => { try { if (presets.current(session) === want) set(before) } catch { /* the session closed */ } }
+  } catch (error) {
+    report(false, 'failed')
+    return null
+  }
 }
 
 /** Run one question through the harness's agent loop, continuing a mirrored
@@ -1004,6 +1113,7 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
   const picked = agentTargetOf(body?.model)
   if (picked && !hasImages) await ctx.sessionController.selectModel({ sessionId, provider: picked.provider, model: picked.model }).catch(() => {})
   const agent = await agentOf(ctx, sessionId)
+  const restorePermission = canvasPermission(ctx, agent, body?.harness?.permission, emit)
   let sawChunk = false      // text deltas reached us live
   let sawReasoning = false  // reasoning deltas reached us live
   let fullText = ''
@@ -1102,6 +1212,7 @@ async function runAgentTurn(ctx, body, emit, isClosed, { answerApprovals = true 
     if (typeof off === 'function') off()
     if (typeof offStream === 'function') offStream()
     if (canvasTurns.get(sessionId) === turnEntry) canvasTurns.delete(sessionId)
+    restorePermission?.()
   }
   return { sessionId, text: fullText }
 }
@@ -1417,12 +1528,24 @@ export async function apply(ctx, config) {
         registeredProviders = ownProvidersOf(body?.providers)
         return sendJson(res, 200, await modelsPayload(ctx, registeredProviders))
       }
+      // which of the canvas's permission modes this host can honour for its own agent
+      if (path === '/permission-modes' && req.method === 'GET') {
+        let names = []
+        try { names = permissionPresets ? [...permissionPresets.names] : [] } catch { /* the service went away */ }
+        return sendJson(res, 200, { auto: names.includes(CANVAS_PRESETS.auto), allow: names.includes(CANVAS_PRESETS.allow) })
+      }
       const approvalRoute = /^\/approvals\/([^/]+)$/.exec(path)
       if (approvalRoute !== null && req.method === 'POST') {
         const id = decodeURIComponent(approvalRoute[1])
         const body = await readJson(req, MAX_WRITE_BODY_BYTES)
         const pending = pendingApprovals.get(id)
         if (!pending) return sendJson(res, 404, { error: 'no such pending approval' })
+        if (pending.kind === 'form') {
+          // a form takes its answers, or a skip
+          if (Array.isArray(body?.answers)) { pending.resolve({ answers: body.answers }); return sendJson(res, 200, { id, outcome: 'answered' }) }
+          pending.resolve('cancelled')
+          return sendJson(res, 200, { id, outcome: 'cancelled' })
+        }
         const outcome = APPROVAL_OUTCOMES.has(body?.outcome) ? body.outcome : 'rejected'
         pending.resolve(outcome)
         return sendJson(res, 200, { id, outcome })
@@ -1556,5 +1679,11 @@ export async function apply(ctx, config) {
   ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: prefix, handler: staticHandler }), 'thoughtdag: static')
   ctx.logger.info('[dsh-thoughtdag] ThoughtDAG mounted at ' + prefix + '/')
   installApprovalAnswerer(ctx)
+  // the permission presets service is optional: hosts without it keep the canvas's 'ask'
+  ctx.inject(['permissionPresets'], (pctx) => {
+    const svc = pctx.permissionPresets
+    permissionPresets = svc
+    pctx.effect(() => () => { if (permissionPresets === svc) permissionPresets = null }, 'thoughtdag: permission presets')
+  })
   await installWhyLayer(ctx, config)
 }

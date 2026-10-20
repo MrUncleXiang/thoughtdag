@@ -95,11 +95,15 @@ async function sessionFileFor(cwd, sessionId) {
 // UUID of its own (a project path that names a session), so take the LAST
 const sessionIdOf = (sessionPath) => { const all = String(sessionPath ?? '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi); return all && all.length ? all[all.length - 1] : null; };
 
-/** The guard file the canvas writes per working directory, as a permission mode. */
+/** The guard file the canvas writes per working directory, as a permission
+ *  mode: ask → the CLI's default (it asks before edits and commands), auto →
+ *  its classifier decides and asks only what it holds risky, allow → nothing
+ *  asked. Questions the model puts to the person reach the canvas in all three. */
 async function permissionModeFor(cwd) {
   try {
     const raw = JSON.parse(await fsp.readFile(path.join(cwd, '.thoughtdag', 'guard.json'), 'utf8'));
     if (raw?.mode === 'allow') return 'bypassPermissions';
+    if (raw?.mode === 'auto') return 'auto';
   } catch { /* default */ }
   return 'default';
 }
@@ -148,8 +152,9 @@ function createClaudeRuntime({ log } = {}) {
           const mode = await permissionModeFor(cwd);
           const model = req.model && typeof req.model === 'object' && req.model.id && req.model.id !== 'default' ? req.model.id : null;
           const resumeId = req.sessionPath ? sessionIdOf(req.sessionPath) : null;
-          const args = ['-p', '--output-format', 'stream-json', '--input-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', mode];
-          if (mode !== 'bypassPermissions') args.push('--permission-prompt-tool', 'stdio');
+          // the prompt channel stays open in every mode: with nothing to
+          // approve, AskUserQuestion still comes through it
+          const args = ['-p', '--output-format', 'stream-json', '--input-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', mode, '--permission-prompt-tool', 'stdio'];
           if (model) args.push('--model', model);
           // only a level the CLI itself lists; anything else means its default
           if (req.effort && (await effortsOf(b)).includes(req.effort)) args.push('--effort', req.effort);
@@ -213,6 +218,42 @@ function createClaudeRuntime({ log } = {}) {
                 if (r.subtype !== 'can_use_tool') { write(proc, { type: 'control_response', response: { subtype: 'error', request_id: m.request_id, error: 'unsupported request' } }); break; }
                 const id = `q-${m.request_id}`;
                 const input = r.input ?? {};
+                // the model's own questions for the person: one form, answered
+                // through the same channel — the answers ride back in the tool's
+                // input, keyed by each question's text (a skip is a refusal the
+                // model reads as "not answered")
+                if (r.tool_name === 'AskUserQuestion' && Array.isArray(input.questions)) {
+                  const qs = input.questions.filter((q) => q && typeof q.question === 'string');
+                  state.asks.set(id, (answer) => {
+                    const given = Array.isArray(answer?.answers) ? answer.answers : null;
+                    if (!given || answer?.cancelled) {
+                      write(proc, { type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response: { behavior: 'deny', message: 'The person skipped these questions without answering.' } } });
+                      mark({ type: 'question_answered', id, outcome: 'cancelled', value: null });
+                      return;
+                    }
+                    const answers = {};
+                    qs.forEach((q, i) => {
+                      const a = given.find((x) => x && x.id === String(i));
+                      if (!a) return;
+                      const own = typeof a.custom === 'string' && a.custom.trim() ? a.custom.trim() : null;
+                      const picked = (Array.isArray(a.selected) ? a.selected : []).filter((x) => typeof x === 'string');
+                      if (q.multiSelect) { const all = own ? [...picked, own] : picked; if (all.length) answers[q.question] = all; }
+                      else if (own || picked[0]) answers[q.question] = own ?? picked[0];
+                    });
+                    write(proc, { type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response: { behavior: 'allow', updatedInput: { ...input, answers } } } });
+                    mark({ type: 'question_answered', id, outcome: 'answered', value: Object.entries(answers).map(([k, v]) => `${k} → ${Array.isArray(v) ? v.join(', ') : v}`).join('; ') || null });
+                  });
+                  mark({
+                    type: 'question', kind: 'form', id, title: 'AskUserQuestion', message: qs.map((q) => q.question).join('\n'),
+                    questions: qs.map((q, i) => ({
+                      id: String(i), question: q.question, ...(typeof q.header === 'string' ? { header: q.header } : {}),
+                      options: (Array.isArray(q.options) ? q.options : []).filter((o) => o && typeof o.label === 'string').map((o) => ({ label: o.label, ...(typeof o.description === 'string' ? { description: o.description } : {}) })),
+                      multiSelect: !!q.multiSelect, custom: true,
+                    })),
+                    options: [], placeholder: null, prefill: null, paths: [], suggest: null,
+                  });
+                  break;
+                }
                 const line = typeof input.command === 'string' ? input.command : (input.file_path ?? input.path ?? JSON.stringify(input).slice(0, 200));
                 // the CLI's own "don't ask again" suggestion names what a standing
                 // allowance covers; sent back scoped to the session, never to settings

@@ -19,7 +19,7 @@
 
 import type { ContextMessage, ImageAttachment, StreamCallbacks } from '../api';
 import type { ModelInfo } from '../use-models';
-import type { AgentRuntime } from '../../types';
+import type { AgentRuntime, AgentPermissionMode } from '../../types';
 import { useUiStore } from '../ui-store';
 import { useStore } from '../../store';
 
@@ -396,7 +396,8 @@ export async function agentCallStream(
             break;
           case 'question':
             callbacks?.onApproval?.({
-              id: String(event.id), kind: (event.kind as 'confirm' | 'select' | 'input' | 'editor') ?? 'confirm',
+              id: String(event.id), kind: (event.kind as 'confirm' | 'select' | 'input' | 'editor' | 'form') ?? 'confirm',
+              ...(Array.isArray(event.questions) ? { questions: event.questions as import('../../types').FormQuestion[] } : {}),
               toolName: target.runtime, callId: null, reason: null,
               name: String(event.title ?? ''), query: String(event.message ?? ''), arguments: null,
               options: Array.isArray(event.options) ? (event.options as string[]) : [],
@@ -517,12 +518,12 @@ export async function adoptAgentTurn(nodeId: string, session: { runtime: AgentRu
 }
 
 /** The active canvas's guard tuning, as the guard file expects it. */
-export async function guardConfig(): Promise<{ mode: 'ask' | 'allow'; allow: string[] }> {
+export async function guardConfig(): Promise<{ mode: AgentPermissionMode; allow: string[] }> {
   try {
     const { useProjects } = await import('../../store/projects');
     const { projects, activeId } = useProjects.getState();
     const g = projects.find((p) => p.id === activeId)?.agentGuard;
-    return { mode: g?.mode === 'allow' ? 'allow' : 'ask', allow: g?.allow ?? [] };
+    return { mode: g?.mode === 'allow' || g?.mode === 'auto' ? g.mode : 'ask', allow: g?.allow ?? [] };
   } catch { return { mode: 'ask', allow: [] }; }
 }
 
@@ -535,8 +536,9 @@ export async function writeGuard(cwd?: string): Promise<void> {
   try { await window.desktopAgents.guardWrite(dir, await guardConfig()); } catch { /* the guard falls back to asking */ }
 }
 
-/** Switch the active canvas's guard mode, effective for the run in progress. */
-export async function setGuardMode(mode: 'ask' | 'allow'): Promise<void> {
+/** Switch the active canvas's permission mode: Pi's guard reads it on the
+ *  run in progress; Codex, Claude Code and the harness take it at their next turn. */
+export async function setGuardMode(mode: AgentPermissionMode): Promise<void> {
   const { useProjects, setProjectAgentGuard } = await import('../../store/projects');
   const { projects, activeId } = useProjects.getState();
   if (!activeId) return;

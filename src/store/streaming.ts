@@ -18,6 +18,7 @@ import { buildLadder, ladderModelFor, inFlight, levelText, type LadderOptions } 
 import { ladderContextFor } from '../lib/ladder-context';
 import type { Ladder } from '../types';
 import { t, fmt } from '../i18n';
+import { notifyWaiting } from '../lib/agents/waiting';
 import { isViewerMode } from '../lib/viewer';
 import type { Reference } from '../types';
 import type { StoreState } from './types';
@@ -468,7 +469,8 @@ export async function runNodeGeneration(
             return { ...n, data: { ...n.data, pendingApprovals: [...cur, { ...request, askedAt }] } };
           }),
         }));
-        toast('info', t('approval.toast'), 8000);
+        toast('info', t((request.kind ?? 'confirm') === 'confirm' ? 'approval.toast' : 'approval.toastAsk'), 8000);
+        notifyWaiting(request, nodeId);
       },
       onApprovalDecided: ({ id, outcome, value, auto, name, query, rule }) => {
         if (!isCurrent()) return;

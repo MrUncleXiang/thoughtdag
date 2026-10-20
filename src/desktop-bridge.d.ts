@@ -125,11 +125,11 @@ interface DesktopAgentsBridge {
   /** the shell-managed working directory of a canvas, created on demand */
   workspace(canvasId: string): Promise<string>;
   /** the person's answer to a runtime's question during a run */
-  answer(runId: string, requestId: string, response: { confirmed: boolean; scope?: 'session' } | { value: string } | { cancelled: true }): Promise<boolean>;
+  answer(runId: string, requestId: string, response: { confirmed: boolean; scope?: 'session' } | { value: string } | { answers: { id: string; selected: string[]; custom?: string }[] } | { cancelled: true }): Promise<boolean>;
   /** a folder picked in the system dialog, or null */
   pickCwd(): Promise<string | null>;
   /** the boundary guard's tuning for a working directory */
-  guardWrite(cwd: string, config: { mode: 'ask' | 'allow'; allow: string[] }): Promise<boolean>;
+  guardWrite(cwd: string, config: { mode: 'ask' | 'auto' | 'allow'; allow: string[] }): Promise<boolean>;
   /** the canvas's materials written under <cwd>/.thoughtdag/materials */
   writeMaterials(cwd: string, files: { name: string; content: string; encoding?: 'utf8' | 'base64' }[]): Promise<{ dir: string | null; written: string[] }>;
   /** the local backup, written by the HOST instead of the browser.

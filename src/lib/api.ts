@@ -8,6 +8,7 @@ import { setModelsCache } from './use-models';
 import { directProvider, directLlmStream, directLlmCall } from './direct-llm';
 import { errorText } from './error-text';
 import { IN_HARNESS } from './embedded';
+import type { FormAnswer } from '../types';
 
 const API_URL = `${API_BASE}/api/claude`;
 // Providers only travel when configured; undefined keeps .env-only setups
@@ -26,18 +27,21 @@ const APPROVALS_URL = `${API_BASE}/api/approvals`;
     withdrawal. A desktop runtime's run answers through the shell; the
     harness bridge takes only the yes/no. False when nothing was waiting
     under that id any more — the runtime withdrew it, or the turn ended. */
-export type QuestionAnswer = { confirmed: boolean; /** 'session': allow this for the rest of the conversation, not once */ scope?: 'session' } | { value: string } | { cancelled: true };
+export type QuestionAnswer = { confirmed: boolean; /** 'session': allow this for the rest of the conversation, not once */ scope?: 'session' } | { value: string } | { answers: FormAnswer[] } | { cancelled: true };
 export async function answerApproval(request: { id: string; channel?: { runId: string } }, answer: QuestionAnswer | 'allowed-once' | 'allowed-session' | 'rejected'): Promise<boolean> {
   const id = request.id;
   const a: QuestionAnswer = typeof answer === 'string' ? { confirmed: answer !== 'rejected', ...(answer === 'allowed-session' ? { scope: 'session' as const } : {}) } : answer;
   if (request.channel?.runId && window.desktopAgents) {
     try { return await window.desktopAgents.answer(request.channel.runId, id, a); } catch { return false; }
   }
-  const outcome = 'confirmed' in a && a.confirmed ? 'allowed-once' : 'rejected';
+  // the harness bridge: a decision by name, or a form's answers (a skip is an empty batch)
+  const body = 'answers' in a ? { answers: a.answers }
+    : 'cancelled' in a ? { outcome: 'cancelled' }
+    : { outcome: 'confirmed' in a && a.confirmed ? (a.scope === 'session' ? 'allowed-session' : 'allowed-once') : 'rejected' };
   try {
     const r = await fetch(`${APPROVALS_URL}/${encodeURIComponent(id)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-      body: JSON.stringify({ outcome }),
+      body: JSON.stringify(body),
     });
     return r.ok;
   } catch {
@@ -247,7 +251,7 @@ export async function llmCallStream(
   /** Agent lanes only: which working directory the turn runs in, which
       session it continues, or which DSH session+turn anchor it forks from.
       The harness fields are ignored by every non-Harness backend. */
-  harness?: { cwd?: string; session?: string; forkSession?: string; forkAnchor?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean },
+  harness?: { cwd?: string; session?: string; forkSession?: string; forkAnchor?: string; sessionPath?: string; forkEntryId?: string; nodeId?: string; continue?: boolean; permission?: 'auto' | 'allow' },
 ): Promise<string> {
   // On the Workers deployment, OpenRouter models stream straight from the
   // browser — the proxy's CPU allowance can't survive big contexts + heavy
@@ -381,6 +385,11 @@ export async function llmCallStream(
           }
           if (parsed.gatewaySearch) {
             cbs.onGatewaySearch?.();
+          }
+          // the harness could not run this turn in the canvas's permission mode: say so once
+          if (parsed.permission && parsed.permission.applied === false) {
+            const why = parsed.permission.reason === 'custom' ? 'agent.permissionCustom' : 'agent.permissionUnavailable';
+            toast('info', fmt(t(why), { mode: t(parsed.permission.mode === 'auto' ? 'agent.permAuto' : 'agent.permAllow') }), 9000);
           }
           // Harness routing frames (only the embedded dsh bridge sends them)
           if (typeof parsed.harnessSession === 'string') {

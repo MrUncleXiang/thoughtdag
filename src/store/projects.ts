@@ -7,6 +7,7 @@ import { resetMemoryWriteCaps } from '../lib/memory';
 import { buildRuleOutRuleIn } from '../lib/paradigms/rule-out-rule-in';
 import { toast } from '../lib/ui-store';
 import { t } from '../i18n';
+import type { AgentPermissionMode } from '../types';
 
 // Project layer: each canvas persists under its own IndexedDB key; this
 // module owns the metadata list and the switching choreography.
@@ -47,7 +48,7 @@ export interface ProjectMeta {
   /** How the agent's boundary guard behaves for this canvas: ask on every
       step outside the working directory (default), or let everything
       through; `allow` lists directories that never ask. */
-  agentGuard?: { mode: 'ask' | 'allow'; allow: string[] };
+  agentGuard?: { mode: AgentPermissionMode; allow: string[] };
   /** Archived = hidden from the dropdown and Recent work, data untouched.
       Tidying and destroying are different verbs. */
   archived?: boolean;
@@ -281,7 +282,7 @@ export async function setProjectAgentCwd(id: string, cwd: string | undefined): P
   await saveMeta();
 }
 
-export async function setProjectAgentGuard(id: string, guard: { mode: 'ask' | 'allow'; allow: string[] } | undefined): Promise<void> {
+export async function setProjectAgentGuard(id: string, guard: { mode: AgentPermissionMode; allow: string[] } | undefined): Promise<void> {
   useProjects.setState((s) => ({
     projects: s.projects.map((p) => (p.id === id ? { ...p, agentGuard: guard } : p)),
   }));

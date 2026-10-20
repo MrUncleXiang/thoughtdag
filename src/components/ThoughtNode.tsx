@@ -110,7 +110,9 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   // box. And while a paradigm run is in progress the canvas is a DASHBOARD
   // (waiting/running states are what the human watches), not a map. Both
   // keep their working form at every zoom.
-  const zoomedOut = mapMode && !isAwaitingHuman && !isAwaitingAsk && !(isParadigmNode && runLocked);
+  // a running agent waiting on the person keeps its card open at any zoom
+  const hasOpenQuestion = !!data.isLoading && (data.pendingApprovals ?? []).some((p) => !p.answered);
+  const zoomedOut = mapMode && !isAwaitingHuman && !isAwaitingAsk && !hasOpenQuestion && !(isParadigmNode && runLocked);
   // Glyph tier: the node collapses to one seal — the thinking's skeleton
   const glyphTier = zoomTier === 'glyph' && zoomedOut;
   // Handles move to hug the seal at glyph tier — tell React Flow to re-measure

@@ -45,7 +45,7 @@ async function writeGuard(cwd, config) {
   if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
   const dir = path.join(cwd, '.thoughtdag');
   await fsp.mkdir(dir, { recursive: true });
-  const mode = config?.mode === 'allow' ? 'allow' : 'ask';
+  const mode = config?.mode === 'allow' || config?.mode === 'auto' ? config.mode : 'ask';
   const allow = Array.isArray(config?.allow) ? config.allow.filter((x) => typeof x === 'string' && path.isAbsolute(x)).slice(0, 100) : [];
   await fsp.writeFile(path.join(dir, 'guard.json'), JSON.stringify({ mode, allow }, null, 2));
   return true;

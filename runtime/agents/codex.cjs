@@ -25,13 +25,15 @@ let located = null;
 const findCodex = () => (located ??= locate('codex', EXTRA_HOMES));
 const childEnv = () => envWith(EXTRA_HOMES);
 
-/** The guard file the canvas writes per working directory, as Codex policy. */
+/** The guard file the canvas writes per working directory, as Codex policy:
+ *  ask → the workspace sandbox, escalations asked of the person; auto → the
+ *  same, with escalations decided by Codex's own reviewer (anything it turns
+ *  down still comes to the person); allow → no sandbox, nothing asked. */
 async function policyFor(cwd) {
-  try {
-    const raw = JSON.parse(await fsp.readFile(path.join(cwd, '.thoughtdag', 'guard.json'), 'utf8'));
-    if (raw?.mode === 'allow') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
-  } catch { /* default */ }
-  return { approvalPolicy: 'on-request', sandbox: 'workspace-write' };
+  let mode = 'ask';
+  try { mode = JSON.parse(await fsp.readFile(path.join(cwd, '.thoughtdag', 'guard.json'), 'utf8'))?.mode ?? 'ask'; } catch { /* default */ }
+  if (mode === 'allow') return { approvalPolicy: 'never', sandbox: 'danger-full-access', approvalsReviewer: 'user' };
+  return { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: mode === 'auto' ? 'auto_review' : 'user' };
 }
 
 // the thread id is in the rollout's file name; take the LAST UUID in the
@@ -242,17 +244,29 @@ function createCodexRuntime({ log } = {}) {
         return ask({ kind: 'confirm', title: 'more permissions requested', message: [params.reason, JSON.stringify(params.permissions ?? {})].filter(Boolean).join('\n'), options: [], placeholder: null, prefill: null, paths: [], suggest: null },
           (a, id) => { const yes = !!a?.confirmed; reply({ permissions: yes ? (params.permissions ?? {}) : {}, scope: 'turn' }); decided(id, yes ? 'allowed-once' : 'rejected'); });
       case 'item/tool/requestUserInput': {
-        // one question at a time; the answers go back together
-        const qs = Array.isArray(params.questions) ? params.questions : [];
-        const answers = {};
-        const next = (i) => {
-          if (i >= qs.length) { reply({ answers }); return; }
-          const q = qs[i];
-          const opts = (q.options ?? []).map((o) => o.label);
-          ask({ kind: opts.length ? 'select' : 'input', title: q.header || 'question', message: q.question || '', options: opts, placeholder: q.isOther ? 'other…' : null, prefill: null, paths: [], suggest: null },
-            (a, id) => { const v = typeof a?.value === 'string' ? a.value : ''; answers[q.id] = { answers: v ? [v] : [] }; decided(id, v ? 'answered' : 'cancelled', v || null); next(i + 1); });
-        };
-        return next(0);
+        // the questions as one form; the answers go back together, keyed by
+        // question id (a secret answer stays out of the record)
+        const qs = (Array.isArray(params.questions) ? params.questions : []).filter((q) => q && typeof q.id === 'string');
+        return ask({
+          kind: 'form', title: 'request_user_input', message: qs.map((q) => q.question || q.header || '').join('\n'),
+          questions: qs.map((q) => ({
+            id: q.id, question: q.question || '', ...(q.header ? { header: q.header } : {}),
+            options: (Array.isArray(q.options) ? q.options : []).filter((o) => o && typeof o.label === 'string').map((o) => ({ label: o.label, ...(o.description ? { description: o.description } : {}) })),
+            custom: !!q.isOther || !(Array.isArray(q.options) && q.options.length), secret: !!q.isSecret,
+          })),
+          options: [], placeholder: null, prefill: null, paths: [], suggest: null,
+        }, (a, id) => {
+          const given = Array.isArray(a?.answers) ? a.answers : [];
+          const answers = {};
+          for (const q of qs) {
+            const g = given.find((x) => x && x.id === q.id);
+            const own = typeof g?.custom === 'string' && g.custom.trim() ? [g.custom.trim()] : [];
+            answers[q.id] = { answers: [...(Array.isArray(g?.selected) ? g.selected.filter((x) => typeof x === 'string') : []), ...own] };
+          }
+          reply({ answers });
+          const shown = qs.filter((q) => !q.isSecret && answers[q.id].answers.length).map((q) => `${q.header || q.question} → ${answers[q.id].answers.join(', ')}`).join('; ');
+          decided(id, given.length ? 'answered' : 'cancelled', shown || null);
+        });
       }
       default:
         return write({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: `unsupported request ${msg.method}` } });
