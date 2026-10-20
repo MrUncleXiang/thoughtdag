@@ -7,6 +7,7 @@ import { storedProviders, storedVision, learnVision, pushProviders } from './run
 import { setModelsCache } from './use-models';
 import { directProvider, directLlmStream, directLlmCall } from './direct-llm';
 import { errorText } from './error-text';
+import { IN_HARNESS } from './embedded';
 
 const API_URL = `${API_BASE}/api/claude`;
 // Providers only travel when configured; undefined keeps .env-only setups
@@ -221,6 +222,17 @@ export interface ToolPrefs {
   web?: boolean;
   scholar?: boolean;
   mcp?: boolean;
+}
+
+/** Whether a request on this model declares tools (web or scholarly search,
+ *  MCP), so the context's execution records can say which tools it has.
+ *  Inside the harness only its own models search, through the host (an own
+ *  OpenRouter interface searches as `:online`, without tools); browser-direct
+ *  lanes carry none; the proxy declares a tool group whenever it is on. */
+export function declaresTools(modelId: string | undefined, prefs: ToolPrefs): boolean {
+  if (IN_HARNESS) return !!prefs.web && !storedProviders().some((p) => p.models.some((m) => m.id === modelId));
+  if (directProvider(modelId)) return false;
+  return !!(prefs.web || prefs.scholar || prefs.mcp);
 }
 
 // Streaming call — invokes onChunk with each text delta, returns full text

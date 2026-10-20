@@ -105,18 +105,26 @@ export function referenceBlockContent(ref: ContextReference): string {
 // The header has to SAY there are no tools: measured on real sessions
 // (2026-10-19), a header that left it open ("use your own tools if you
 // have them") still drew written calls; this wording drew none. An agent
-// does have tools, so its requests carry the second header instead
-// (recordsForAgent, applied where the route is known).
+// does have tools, and a request that declares search tools has those, so
+// such requests carry their own header instead (recordsForAgent /
+// recordsWithTools, applied where the route is known).
 const RECORD_HEADER = '[Execution record — an earlier agent turn already ran these tools in its own session. This is a log of what happened there, kept for reference; this conversation has no tools. If the question needs something run or checked, say what to run and why; do not write tool calls, and do not state results you have not seen in the context.]';
 const AGENT_RECORD_HEADER = '[Execution record — an earlier agent turn already ran these tools in its own session. This is a log of what happened there, kept for reference, not a pending call.]';
+const TOOLS_RECORD_HEADER = '[Execution record — an earlier agent turn already ran these tools in its own session. This is a log of what happened there, kept for reference. This conversation cannot run commands or read files; its only tools are the ones declared with this request. If the question needs something run or checked, say what to run and why; do not write calls to tools that are not declared, and do not state results you have not seen in the context.]';
+
+const withRecordHeader = (messages: ContextMessage[], header: string): ContextMessage[] =>
+  messages.map((m) => (m.role === 'user' && m.content.startsWith(RECORD_HEADER)
+    ? { ...m, content: header + m.content.slice(RECORD_HEADER.length) }
+    : m));
 
 /** The same context for an agent request: records keep their contents and
  *  drop the no-tools sentence, which would be false there. */
-export function recordsForAgent(messages: ContextMessage[]): ContextMessage[] {
-  return messages.map((m) => (m.role === 'user' && m.content.startsWith(RECORD_HEADER)
-    ? { ...m, content: AGENT_RECORD_HEADER + m.content.slice(RECORD_HEADER.length) }
-    : m));
-}
+export const recordsForAgent = (messages: ContextMessage[]): ContextMessage[] => withRecordHeader(messages, AGENT_RECORD_HEADER);
+
+/** The same context for a request that declares tools (web or scholarly
+ *  search, MCP): the records say which tools this conversation lacks
+ *  instead of claiming it has none. */
+export const recordsWithTools = (messages: ContextMessage[]): ContextMessage[] => withRecordHeader(messages, TOOLS_RECORD_HEADER);
 
 const isToolRecord = (att: Attachment): boolean => att.name.startsWith('tool: ') && att.content.startsWith('[call]');
 

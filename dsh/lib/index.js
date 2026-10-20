@@ -570,7 +570,8 @@ async function modelsPayload(ctx, ownProviders = []) {
   return {
     models,
     default: def && models.some(m => m.id === def) ? def : (models[0]?.id ?? null),
-    capabilities: { webSearch: ownProviders.some(p => isOpenRouterURL(p.baseURL)), searchEngine: 'none', scholarSearch: false, vision: models.some(m => m.vision) },
+    // the harness's own models search through the host's web service; an own OpenRouter interface through `:online`
+    capabilities: { webSearch: typeof ctx.web?.search === 'function' || ownProviders.some(p => isOpenRouterURL(p.baseURL)), searchEngine: 'none', scholarSearch: false, vision: models.some(m => m.vision) },
     harness: { routableProviders: cat.routableProviders ?? [], failures: (cat.failures ?? []).map(f => ({ provider: f.id, message: f.message })) },
   }
 }
@@ -732,6 +733,150 @@ async function callOf(ctx, body, target) {
     }
   }
   return { provider: target.provider, model: target.model, messages, ...(system.length ? { system: system.join('\n\n') } : {}) }
+}
+
+// ── web search for the harness's own models ────────────────────────────
+// The canvas's web toggle reaches a bare model as one tool, web_search,
+// served by the host's web service (ctx.web): the host owns the backend
+// (its own search, or DeepSeek's Search API once the person turns that on
+// in the harness's web search settings) and the credential, so this plugin
+// never holds a key. Results are numbered across the whole answer and
+// stream back in the frames the app's own proxy uses: a { tool } ping per
+// search, { sources } at the end.
+// searches per answer, as the tool's description promises the model
+const SEARCH_LIMIT = 3
+const SEARCH_RESULTS = 5
+// keep in step with makeTools() and the directive in server.mjs
+const WEB_SEARCH_TOOL = {
+  name: 'web_search',
+  description:
+    'ONLY for current events, time-sensitive facts, or specific verifiable claims you cannot answer confidently from your own knowledge. ' +
+    'NEVER use for conceptual, definitional, reasoning or creative questions — answer those directly. ' +
+    'Results are numbered [1], [2], ... — when you use information from a result, cite it inline as [n]. At most 3 searches per answer.',
+  parameters: {
+    type: 'object',
+    properties: { query: { type: 'string', description: 'The search query, in the language most likely to find good results' } },
+    required: ['query'],
+    additionalProperties: false,
+  },
+}
+const SEARCH_DIRECTIVE = [
+  'Tools are AVAILABLE, not mandatory: first decide whether your own knowledge answers the question. Conceptual, definitional, reasoning and creative questions must be answered DIRECTLY, with no tool calls. Search only when the answer depends on current events, specific verifiable facts you are unsure of, or literature citations — or when the user explicitly asks you to look something up.',
+  'After using any search tool, you MUST follow up with a complete answer that SYNTHESIZES the results in your own words — analyze and conclude, never just list the results.',
+  'Cite sources inline as [n], using EXACTLY the bracket numbers shown in this turn\'s search results (they always start at [1]). Ignore any citation numbers appearing in earlier conversation messages — they refer to different sources.',
+  'If the search results are not actually relevant to the question, say so explicitly and answer from your own knowledge instead of forcing citations.',
+  'Never end your turn immediately after a search.',
+].join(' ')
+const SEARCH_LIMIT_NOTE = '\n\n(That was the last search for this answer: write the final answer now from the results above.)'
+
+/** Chunks of one model call assembled the way the host's own assembler
+ *  does it (a closed block as the adapter sent it, an open one from its
+ *  deltas), so a round's blocks line up with its replay state. */
+function chunkAssembler() {
+  const parts = new Map()
+  const order = []
+  let finish = { kind: 'stop' }
+  let replayState
+  const at = (index, blockType) => {
+    let p = parts.get(index)
+    if (!p) { p = { blockType, text: '', args: '' }; parts.set(index, p); order.push(index) }
+    return p
+  }
+  return {
+    push(chunk) {
+      switch (chunk.type) {
+        case 'block-start': at(chunk.index, chunk.blockType); return
+        case 'text-delta':
+        case 'reasoning-delta': { const p = at(chunk.index, chunk.type === 'text-delta' ? 'text' : 'reasoning'); if (!p.block) p.text += chunk.text; return }
+        case 'tool-call-delta': {
+          const p = at(chunk.index, 'tool-call')
+          if (p.block) return
+          p.id = chunk.id
+          if (chunk.name) p.name = chunk.name
+          p.args += chunk.argumentsDelta ?? ''
+          return
+        }
+        case 'block-end': { const p = at(chunk.index, chunk.block.type); if (!p.block) p.block = chunk.block; return }
+        case 'finish': finish = chunk.reason; replayState = chunk.replayState; return
+      }
+    },
+    blocks: () => order.map((index) => {
+      const p = parts.get(index)
+      if (p.block) return p.block
+      if (p.blockType === 'tool-call') return { type: 'tool-call', id: p.id ?? `call-${index}`, name: p.name ?? '', arguments: p.args }
+      return p.blockType === 'text' || p.blockType === 'reasoning' ? { type: p.blockType, text: p.text } : null
+    }).filter(Boolean),
+    get finish() { return finish },
+    get replayState() { return replayState },
+  }
+}
+
+/** One web_search call run through the host; its results join `sources`
+ *  under the next numbers, and the text the model reads comes back. */
+async function webSearchFor(ctx, call, sources, write) {
+  let query = ''
+  try { query = String(JSON.parse(call.arguments || '{}')?.query ?? '').trim() } catch { /* malformed arguments */ }
+  if (!query) return { text: 'web_search needs a query.', isError: true }
+  write({ tool: { name: 'web_search', query } })
+  try {
+    const r = await ctx.web.search({ query, maxResults: SEARCH_RESULTS }, AbortSignal.timeout(60000))
+    const results = (r?.sources ?? []).filter(s => s?.url).map(s => ({
+      title: s.title || s.url,
+      url: s.url,
+      content: String(s.snippet ?? '').slice(0, 600),
+      ...(s.publishedAt ? { date: String(s.publishedAt).slice(0, 10) } : {}),
+    }))
+    const start = sources.length
+    sources.push(...results)
+    if (results.length === 0) return { text: 'No results found.' }
+    return { text: results.map((x, i) => `[${start + i + 1}] ${x.title}${x.date ? ` (${x.date})` : ''}\n${x.url}\n${x.content}`).join('\n\n') }
+  } catch (error) {
+    const why = [error?.code, error instanceof Error ? error.message : String(error)].filter(Boolean).join(': ')
+    return { text: `Search failed (${why}). Answer from your own knowledge and say that the search did not run.`, isError: true }
+  }
+}
+
+/** One answer from a harness model, streamed to the canvas as its frames.
+ *  With search on, the model may call web_search up to SEARCH_LIMIT times:
+ *  each round's blocks and results join the request (the way an agent keeps
+ *  its own tool history) and the next round continues; a call past the
+ *  limit is answered with "no more searches". */
+async function harnessStream(ctx, target, options, search, write, isClosed) {
+  const sources = []
+  const messages = [...options.messages]
+  const request = search
+    ? { ...options, tools: [WEB_SEARCH_TOOL], system: options.system ? `${options.system}\n\n${SEARCH_DIRECTIVE}` : SEARCH_DIRECTIVE }
+    : options
+  let searched = 0
+  for (let round = 0; round <= SEARCH_LIMIT + 1; round++) {
+    const asm = chunkAssembler()
+    for await (const chunk of ctx.llm.stream({ ...request, messages })) {
+      if (isClosed()) return
+      asm.push(chunk)
+      if (chunk.type === 'text-delta' && chunk.text) write({ text: chunk.text })
+      else if (chunk.type === 'reasoning-delta' && chunk.text) write({ reasoning: chunk.text })
+    }
+    const finish = asm.finish
+    if (finish.kind === 'error') throw new Error(finish.failure?.message ?? finish.failure?.code ?? 'the model call failed')
+    if (finish.kind === 'aborted') return
+    // a call cut off by the output limit cannot run safely (the host's rule)
+    const calls = finish.kind === 'max-tokens' ? [] : asm.blocks().filter(b => b.type === 'tool-call')
+    if (!search || calls.length === 0 || round === SEARCH_LIMIT + 1) break
+    messages.push({
+      id: 'td-' + randomUUID(), role: 'assistant', content: asm.blocks(),
+      source: { kind: 'model', provider: target.provider, model: target.model, ...(asm.replayState ? { replayState: asm.replayState } : {}) },
+    })
+    for (const call of calls) {
+      const allowed = call.name === WEB_SEARCH_TOOL.name && searched < SEARCH_LIMIT
+      if (allowed) searched++
+      const r = allowed
+        ? await webSearchFor(ctx, call, sources, write)
+        : { text: 'No more searches for this answer: write the final answer now from the results above.', isError: true }
+      const text = allowed && searched === SEARCH_LIMIT ? r.text + SEARCH_LIMIT_NOTE : r.text
+      messages.push({ id: 'td-' + randomUUID(), role: 'tool', toolCallId: call.id, content: [{ type: 'text', text }], source: { kind: 'tool', callId: call.id }, ...(r.isError ? { isError: true } : {}) })
+    }
+  }
+  if (sources.length > 0) write({ sources })
 }
 
 /** The canvas's compiled messages, split for the agent: the last user
@@ -1328,11 +1473,8 @@ export async function apply(ctx, config) {
         let closed = false
         req.on('close', () => { closed = true })
         try {
-          for await (const chunk of ctx.llm.stream(options)) {
-            if (closed) break
-            if (chunk.type === 'text-delta' && chunk.text) res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`)
-            else if (chunk.type === 'reasoning-delta' && chunk.text) res.write(`data: ${JSON.stringify({ reasoning: chunk.text })}\n\n`)
-          }
+          const search = body?.webSearch === true && typeof ctx.web?.search === 'function'
+          await harnessStream(ctx, target, options, search, frame => { if (!closed) res.write(`data: ${JSON.stringify(frame)}\n\n`) }, () => closed)
           if (!closed) res.write('data: [DONE]\n\n')
         } catch (error) {
           if (!closed) res.write(`data: ${JSON.stringify({ error: error instanceof Error ? error.message : String(error) })}\n\n`)

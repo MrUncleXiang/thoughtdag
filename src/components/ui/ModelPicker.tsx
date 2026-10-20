@@ -398,9 +398,10 @@ function GlobalCapabilities() {
         {dot(!!caps?.webSearch)}
         <div className="flex-1 min-w-0">
           <p className="text-2xs text-ink-muted font-medium">{t('caps.webSearch')}</p>
-          {/* inside the harness the host has no search engine of its own: an
-              interface that carries web search uses it, the engine picker
-              and the AnySearch key would be dead controls there (#72) */}
+          {/* inside the harness the host's own web search serves its models
+              (its service is set in the harness), an own OpenRouter interface
+              searches as :online; the engine picker and the AnySearch key
+              would be dead controls there (#72) */}
           {caps?.webSearch && IN_HARNESS ? (
             <p className="text-2xs text-ink-faint leading-relaxed mt-0.5">{t('caps.webSearchViaInterface')}</p>
           ) : caps?.webSearch ? (
@@ -415,11 +416,15 @@ function GlobalCapabilities() {
               <option value="search_std">{t('caps.engineStd')}</option>
               <option value="search_pro">{t('caps.enginePro')}</option>
               {(caps.anysearch || anysearchKey) && <option value="anysearch">{t('caps.engineAnysearch')}</option>}
+              {(caps.deepseekSearch || searchEnginePref === 'deepseek') && <option value="deepseek">{t('caps.engineDeepseek')}</option>}
             </select>
           ) : (
             <p className="text-2xs text-ink-faint leading-relaxed mt-0.5">{t(IN_HARNESS ? 'caps.webSearchOffHost' : 'caps.webSearchOff')}</p>
           )}
           {!IN_HARNESS && caps?.webSearch && searchEnginePref === 'anysearch' && anysearchKeyRow('caps.anysearchHintQuota')}
+          {!IN_HARNESS && caps?.webSearch && searchEnginePref === 'deepseek' && (
+            <p className="text-2xs text-ink-faint leading-relaxed mt-0.5" data-deepseek-search-hint>{t(caps.deepseekSearch ? 'caps.deepseekHintBilled' : 'caps.deepseekHintNoKey')}</p>
+          )}
           {!IN_HARNESS && !caps?.webSearch && anysearchKeyRow('caps.anysearchHintEnable')}
         </div>
       </div>

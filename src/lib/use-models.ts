@@ -21,6 +21,8 @@ export interface Capabilities {
   searchEngine: string;
   /** AnySearch engine reachable (always true locally; hosted = key present). */
   anysearch?: boolean;
+  /** DeepSeek's Search API can serve as the engine (a DeepSeek key is configured). */
+  deepseekSearch?: boolean;
   scholarSearch: boolean;
   vision: boolean;
 }
@@ -68,13 +70,22 @@ function modelBasename(id: string): string {
   return (id.split('/').pop() ?? id).toLowerCase();
 }
 
+/** Ids a provider retired and now serves through a successor (DeepSeek's
+    V4 Flash names since 2026-09-10): a pin on one follows the successor. */
+const RETIRED_MODEL_IDS: Record<string, string> = {
+  'deepseek-v4-flash': 'deepseek-flash',
+  'deepseek-v4-flash-vision-exp': 'deepseek-flash',
+};
+
 /** Reconcile a pinned model id against the locally available list: exact id
-    → itself; same family under a different provider → the local id;
-    otherwise null (not reachable here). */
+    → itself; same family under a different provider → the local id; a
+    retired id → its successor; otherwise null (not reachable here). */
 export function reconcileModelId(pinned: string, models: ModelInfo[]): string | null {
   if (models.some((m) => m.id === pinned)) return pinned;
   const base = modelBasename(pinned);
-  const match = models.find((m) => modelBasename(m.id) === base);
+  const successor = RETIRED_MODEL_IDS[base];
+  const match = models.find((m) => modelBasename(m.id) === base)
+    ?? (successor ? models.find((m) => modelBasename(m.id) === successor) : undefined);
   return match ? match.id : null;
 }
 

@@ -165,8 +165,9 @@ export async function pushProviders(providers: RuntimeProvider[]): Promise<Model
 // which used to bury real vision models (a directly-connected glm-4v-flash
 // carried no badge and the Recognize button never appeared). The hint only
 // ever ADDS vision — metadata, when present, always wins, and unknown stays
-// unknown rather than false.
-const VISION_ID_HINT = /gemini|gpt-4o|gpt-4\.1|gpt-5|claude|glm-4v|qwen[\w.-]*-vl|qvq|llava|pixtral|minicpm-v|internvl|kimi-latest|-vision|vision-/i;
+// unknown rather than false. DeepSeek's own deepseek-flash (V4.1 Flash)
+// reads images; the bare id only, since other hosts of V4 Flash weights may not.
+const VISION_ID_HINT = /gemini|gpt-4o|gpt-4\.1|gpt-5|claude|glm-4v|qwen[\w.-]*-vl|qvq|llava|pixtral|minicpm-v|internvl|kimi-latest|-vision|vision-|^deepseek-flash$/i;
 
 /** The id-only vision guess, for models added outside a probe (recommended
  *  ids a provider's /models route forgot to list). Same contract as the

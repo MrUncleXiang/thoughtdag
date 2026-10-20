@@ -67,6 +67,8 @@ dsh web
 
 The plugin bundles the canvas and memory layer. Requires Node 22.19+ (22.x) or 24+, and DeepSeek Harness 0.1.2-rc.1 or later. [Plugin guide →](https://chenxiachan.github.io/thoughtdag/docs/guides/deepseek-harness)
 
+With the web switch on, the harness's own models search through Harness's web search. The search service and its billing are set in Harness under **Plugins › Built-in plugin settings › Web search**. Turning on the new Web Search API there gives each result an excerpt; the default service usually returns titles and links only.
+
 <img src="docs/harness-plugin-en.gif" alt="Switching from chat to the ThoughtDAG canvas inside DeepSeek Harness, asking a question and continuing in a new node." width="100%"/>
 
 ## The desktop app
@@ -201,7 +203,7 @@ Deleting a wrong claim may leave its consequences in later replies. In our synth
 
 Canvases, documents, the index and dossiers are stored locally. **Remote model calls send relevant content to your configured providers**, including decision and dossier-generation calls. Provider charges may apply; disabling Jev does not disable ordinary model calls.
 
-Connect local Ollama or an OpenAI-compatible endpoint. Inside DeepSeek Harness, inference uses the harness's providers and keys. Export backups and Markdown, and review text and metadata before sharing. [Setup and privacy details →](docs/setup.md)
+Connect local Ollama or an OpenAI-compatible endpoint. Inside DeepSeek Harness, inference uses the harness's providers and keys. Web search uses the engine picked in the model menu: Zhipu GLM, AnySearch (keyless on local runs), or DeepSeek Search with your DeepSeek key, billed per successful search ($0.75 per 1,000). Export backups and Markdown, and review text and metadata before sharing. [Setup and privacy details →](docs/setup.md)
 
 ## Contributors
 

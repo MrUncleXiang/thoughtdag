@@ -1,9 +1,9 @@
 import type { StoreApi } from 'zustand';
 import { walkUpAncestors } from '../lib/graph';
-import { upstreamFingerprint, upstreamParts, recordParts, recordsForAgent, type MessageSource } from './context-builder';
+import { upstreamFingerprint, upstreamParts, recordParts, recordsForAgent, recordsWithTools, type MessageSource } from './context-builder';
 import { sha256Hex, canonicalStringify } from '../lib/context-bundle';
 import { pruneHighlights } from '../lib/highlight-match';
-import { llmCall, llmCallStream, type ContextMessage, type ImageAttachment } from '../lib/api';
+import { llmCall, llmCallStream, declaresTools, type ContextMessage, type ImageAttachment } from '../lib/api';
 import { harnessOutbound, claimHarnessTurn, stampHarnessTurn, isHarnessAgentModel } from '../lib/atlas/dsh-bridge';
 import { agentOutbound, adoptAgentTurn, claimAgentTurn, isAgentModel } from '../lib/agents/agent-runtime';
 import { countTokens, activeSummary } from '../utils';
@@ -293,8 +293,21 @@ export async function runNodeGeneration(
     }
   }
 
-  // execution records tell a plain model it has no tools; an agent has them
+  // Search permissions live on the node (snapshotted at ask time); legacy
+  // nodes without flags follow the current shared defaults
+  const toolPrefsNow = () => {
+    const selfData = get().nodes.find((n) => n.id === nodeId)?.data;
+    return {
+      web: selfData?.webSearch ?? useUiStore.getState().webSearchEnabled,
+      scholar: selfData?.scholarSearch ?? useUiStore.getState().scholarSearchEnabled,
+      mcp: useUiStore.getState().mcpEnabled,
+    };
+  };
+
+  // execution records tell a plain model it has no tools; an agent has them,
+  // and a request that declares search tools has those
   if (isAgentModel(requestedModel) || isHarnessAgentModel(requestedModel)) messages = recordsForAgent(messages);
+  else if (declaresTools(requestedModel, toolPrefsNow())) messages = recordsWithTools(messages);
 
   try {
     // Context budget: browser-configured models carry their probed window.
@@ -482,16 +495,7 @@ export async function runNodeGeneration(
       onReasoning: (_chunk, fullSoFar) => {
         pushStream({ reasoning: fullSoFar });
       },
-    }, (() => {
-      // Search permissions live on the node (snapshotted at ask time);
-      // legacy nodes without flags follow the current shared defaults
-      const selfData = get().nodes.find((n) => n.id === nodeId)?.data;
-      return {
-        web: selfData?.webSearch ?? useUiStore.getState().webSearchEnabled,
-        scholar: selfData?.scholarSearch ?? useUiStore.getState().scholarSearchEnabled,
-        mcp: useUiStore.getState().mcpEnabled,
-      };
-    })(), pinnedModel, harnessRoute ?? (agentRoute ? { ...agentRoute, nodeId } : undefined));
+    }, toolPrefsNow(), pinnedModel, harnessRoute ?? (agentRoute ? { ...agentRoute, nodeId } : undefined));
     flushStream();
     if (!isCurrent()) return; // superseded while finishing: drop everything
     activeAbortControllers.delete(nodeId);

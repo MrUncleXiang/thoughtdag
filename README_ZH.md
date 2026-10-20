@@ -67,6 +67,8 @@ dsh web
 
 插件自带画布和记忆层。需要 Node 22.19+（22.x）或 24+，以及 DeepSeek Harness 0.1.2-rc.1 或更新版本。[插件说明 →](https://chenxiachan.github.io/thoughtdag/docs/zh/guides/deepseek-harness)
 
+打开联网开关后，Harness 自带的模型通过 Harness 的网页搜索查资料。用哪个搜索服务、怎么计费，在 Harness 的 **插件 › 内置插件配置 › 网页搜索** 里设置。在那里打开「启用新版 Web 搜索 API」后，每条结果都带摘要；默认服务通常只返回标题和链接。
+
 <img src="docs/harness-plugin-zh.gif" alt="在 DeepSeek Harness 中切换到 ThoughtDAG 画布，提问并从回答继续展开新节点。" width="100%"/>
 
 ## 桌面版
@@ -201,7 +203,7 @@ npm run dev       # 前端 :5173
 
 画布、文档、索引和档案保存在本机。**调用远程模型时，相关内容会发送到你配置的服务**，判断和档案生成也不例外。服务商可能收费，关闭 Jev 不等于关闭普通模型调用。
 
-可以接入本地 Ollama 或兼容 OpenAI 协议的端点；在 DeepSeek Harness 内，推理由 Harness 的服务配置和密钥处理。支持备份和 Markdown 导出，公开分享前请检查正文及元数据。[配置与隐私说明 →](docs/setup_ZH.md)
+可以接入本地 Ollama 或兼容 OpenAI 协议的端点；在 DeepSeek Harness 内，推理由 Harness 的服务配置和密钥处理。联网搜索用模型菜单里选定的引擎：智谱 GLM、AnySearch（本地运行免 key），或用你的 DeepSeek key 的 DeepSeek 搜索，按成功的搜索次数计费（每千次 5 元）。支持备份和 Markdown 导出，公开分享前请检查正文及元数据。[配置与隐私说明 →](docs/setup_ZH.md)
 
 ## 贡献者
 
