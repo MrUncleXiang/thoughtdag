@@ -89,7 +89,8 @@ export function generateSummary(nodeId: string, question: string, response: stri
 /** The map lines a fresh takeaway should align with: the ancestor path's
     tagged takeaways (nearest 8), prefixed by the map's opening question. */
 export function collectMapLines(nodeId: string, nodes: StoreState['nodes'], edges: StoreState['edges']): string[] {
-  const { ordered } = walkUpAncestors(nodeId, nodes, edges);
+  // an archived step is out of the context, so out of the map the summariser aligns with (as in ladderContextFor)
+  const ordered = walkUpAncestors(nodeId, nodes, edges).ordered.filter((n) => !n.data.archived);
   const TAG: Record<string, string> = { ruleout: 'RULEOUT', decision: 'DECISION', pivot: 'PIVOT', open: 'OPEN' };
   const lines = ordered
     .filter((n) => n.id !== nodeId)

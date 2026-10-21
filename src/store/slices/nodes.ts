@@ -278,6 +278,8 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
     for (const n of nodes) {
       if (!n.data.lastContextHash || !n.data.response) continue;
       if (['note', 'file', 'link', 'frame'].includes(n.data.stepKind ?? '')) continue;
+      // an archived answer feeds no context: replaying it would only cost model calls
+      if (n.data.archived) continue;
       const fp = upstreamFingerprint(n.id, nodes, edges);
       if (fp !== n.data.lastContextHash) { stale.push(n.id); fps[n.id] = fp; }
     }
