@@ -39,6 +39,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
+    version: '0.5.22',
+    date: '2026-10-21',
+    announce: false,
+    lead: {
+      zh: '撤销和重做按步进行：撤销一步再重做，画布回到原样；输入框里的 Cmd/Ctrl+Z 只撤销刚打的字；拖动、调整大小、分区框和折叠各算一步；正在生成的节点不会被撤销删掉（#79）。关闭窗口不再中断正在生成的回答：Mac 上关窗口改为隐藏，Windows 和 Linux 可以在画布菜单里选择关闭时留在托盘（#77）。没有手动调过大小的长便签，正文到回答框的高度为止，超出部分滚动。已归档的节点不再进入摘要读到的上下文，也不再被重算（#51）。',
+      en: 'Undo and redo go step by step: undoing a step and redoing it returns the canvas as it was; Cmd/Ctrl+Z in a text field takes back only the typing; moves, resizes, frames and folds are steps of their own; a node still generating is never removed by an undo (#79). Closing the window no longer stops an answer in progress: on macOS the window hides, and on Windows and Linux the canvas menu can keep the app in the tray (#77). A long note that was never resized stops at the answer box\'s height and scrolls. Archived steps stay out of what the summariser reads and out of replay (#51).',
+    },
+    items: [],
+  },
+  {
     version: '0.5.21',
     date: '2026-10-20',
     announce: true,
