@@ -1026,6 +1026,7 @@ export const en = {
   'question.editCancel': 'Cancel',
   'question.editSubmit': 'Submit & generate',
   'toast.noModelYet': 'No model connected yet. Pick a provider and paste a key, then hit Retry on the node.',
+  'toast.undoWhileGenerating': 'The answer this step asked for is still generating. Undo once it finishes, or stop it first.',
   'toast.rateLimited': 'The model rate-limited this request (free tiers meter requests per minute). Wait half a minute and hit Retry.',
   'toast.contextOverWindow': 'Context is ~{est} tokens, over the {limit}-token window of {model}. Pick a larger-window model, or prune wires and attachments.',
   'toast.visionRerouted': '"{from}" cannot see images — "{to}" is answering this one.',

@@ -185,6 +185,7 @@ export async function importOrAppendConversation(conv: import('../import-chat').
         }
         store.pushHistory();
         useStore.setState((s) => ({ nodes: [...s.nodes, ...seg.moved], edges: [...s.edges, ...seg.edges] }));
+        store.pushHistory();
         await registerLedgerEntry(anchor.project, sideways ? 'branch' : 'chapter', {
           sessionId: conv.sessionId, runner: conv.source, importedCount: qa.length,
           tailNodeId: tailQaId, anchorNodeId: anchorNode.id,
@@ -233,6 +234,7 @@ export async function mountConversationToProject(
   const seg = placeSegment(store, built.nodes, innerEdges, anchorNode, false);
   store.pushHistory();
   useStore.setState((s) => ({ nodes: [...s.nodes, ...seg.moved], edges: [...s.edges, ...seg.edges] }));
+  store.pushHistory();
   await registerLedgerEntry(projectId, 'chapter', {
     sessionId: conv.sessionId, runner: conv.source, importedCount: qa.length,
     tailNodeId: qa.at(-1)?.id ?? built.nodes.at(-1)!.id, anchorNodeId: anchorNode.id,
@@ -418,6 +420,7 @@ async function appendPastLedger(
 
   store.pushHistory();
   useStore.setState((s) => ({ nodes: [...s.nodes, ...moved], edges: [...s.edges, ...extraEdges] }));
+  store.pushHistory();
   await patchLedgerEntry(hit.project.id, conv.sessionId!, { importedCount: qa.length, tailNodeId: tailQaId });
   useUiStore.getState().setArrivalFocusNodeId(moved[anchor ? 0 : 1].id);
   return { kind: 'appended', turns: qa.length - hit.entry.importedCount };

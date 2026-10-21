@@ -100,6 +100,7 @@ export default function CanvasChat({ open, onClose, onLocate }: { open: boolean;
     }
     st.setNodes([...st.nodes, node]);
     st.setEdges([...useStore.getState().edges, ...newEdges]);
+    st.pushHistory();
     for (const e of newEdges) useStore.getState().logEvent('connect', e.id);
     useStore.getState().logEvent('ask', node.id, { chars: question.length });
     toast('success', fmt(t('chat.dropped'), { n: cited.length }), 6000);

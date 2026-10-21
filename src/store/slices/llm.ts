@@ -17,6 +17,8 @@ import { condenseGuard } from '../../lib/condense-guard';
 export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, get) => ({
   addQuestion: async (question: string, opts: AddQuestionOptions = {}) => {
     if (condenseGuard()) return;
+    // the ask is one step, recorded when its answer lands (settleNode); settle what came before it
+    get().pushHistory();
     const { parentId, branchContext, branchYRatio, inheritRole, rolePrompt, initialAttachments, excludeAllInheritedAttachments, mentions } = opts;
     const id = generateId();
     get().logEvent('ask', id, { chars: question.length, ...(parentId ? {} : { root: true }), ...(branchContext ? { branch: true } : {}) });
@@ -357,6 +359,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         n.id === nodeId ? { ...n, data: { ...n.data, question: q, askedAt: new Date().toISOString(), isEditing: false } } : n
       ),
     }));
+    get().pushHistory();
     triggerParadigmCascade(get, nodeId);
   },
 
@@ -413,6 +416,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
   regenerate: async (nodeId: string) => {
     const node = get().nodes.find((n) => n.id === nodeId);
     if (!node) return;
+    get().pushHistory();
 
     // Find a structural parent (any incoming edge) for creating sibling
     const parentEdge = get().edges.find((e) => e.target === nodeId);

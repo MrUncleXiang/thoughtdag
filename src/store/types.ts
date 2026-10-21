@@ -16,6 +16,9 @@ export interface HistorySlice {
   history: Snapshot[];
   historyIndex: number;
   pushHistory: () => void;
+  /** The app finished filling a node in (an answer, a fetched page): fold the
+      result into the snapshots taken while it was pending, then record. */
+  settleNode: (nodeId: string, pending?: (data: ThoughtNode['data']) => boolean) => void;
   undo: () => void;
   redo: () => void;
 }

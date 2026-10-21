@@ -98,6 +98,8 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
   toggleCollapse: (nodeId: string) => {
     const node = get().nodes.find((n) => n.id === nodeId);
     if (!node) return;
+    // folding moves everything below it: one step of its own
+    get().pushHistory();
 
     // Current height is measured; the post-toggle height must be estimated
     const oldHeight = nodeHeight(node);
@@ -120,6 +122,7 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
         return n;
       }),
     }));
+    get().pushHistory();
   },
 
   setEditing: (nodeId: string, editing: boolean) => {
@@ -349,6 +352,8 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
   },
 
   navigateVersion: (nodeId: string, direction: 'prev' | 'next') => {
+    // the version shown is the one downstream reads: switching is a step
+    get().pushHistory();
     set((state) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== nodeId) return n;
@@ -364,6 +369,7 @@ export const createNodeSlice: StateCreator<StoreState, [], [], NodeSlice> = (set
         };
       }),
     }));
+    get().pushHistory();
   },
 
   deleteVersion: (nodeId: string, versionIndex: number) => {

@@ -55,7 +55,8 @@ export function spawnContentNode(
 ): string {
   const st = useStore.getState();
   const node = buildContentNode(kind, position, init);
-  st.setNodes([...st.nodes, node]);
+  st.pushHistory();
+  st.setNodes([...useStore.getState().nodes, node]);
   st.pushHistory();
   if (node.data.question) triggerParadigmCascade(useStore.getState, node.id);
   return node.id;
@@ -294,6 +295,7 @@ export async function recognizePdfPages(
   }
   useStore.getState().pushHistory();
   useStore.getState().setAttachmentData(nodeId, attId, { extractedText: parts.join('\n\n'), extractedBy: winner });
+  useStore.getState().pushHistory();
   toast('success', t('reader.recognizeDone'));
 }
 
@@ -345,6 +347,7 @@ export async function generateDigest(nodeId: string, attId: string): Promise<boo
       data: {},
     };
     const edges = [...st.edges, edge];
+    st.pushHistory();
     useStore.setState({ nodes: autoLayout([...st.nodes, node], edges), edges });
     st.pushHistory();
     digestNode = useStore.getState().nodes.find((n) => n.id === id);
@@ -361,6 +364,9 @@ export async function generateDigest(nodeId: string, attId: string): Promise<boo
 }
 
 /** Fetch the URL server-side and store the stamped text snapshot on the node. */
+/** A link card still waiting for its page: no text yet and no error title. */
+const linkPending = (d: ThoughtData) => !d.question && !d.linkTitle;
+
 export async function fetchLinkIntoNode(nodeId: string, url: string): Promise<void> {
   const patch = (p: Partial<ThoughtData>) => useStore.setState((s) => ({
     nodes: s.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...p } } : n)),
@@ -389,9 +395,10 @@ export async function fetchLinkIntoNode(nodeId: string, url: string): Promise<vo
       linkFetchedAt: snap.fetchedAt,
       tokenCount: countTokens(text),
     });
-    useStore.getState().pushHistory();
+    useStore.getState().settleNode(nodeId, linkPending);
     triggerParadigmCascade(useStore.getState, nodeId);
   } catch (err) {
     patch({ linkTitle: `⚠ ${err instanceof Error ? err.message : 'fetch failed'}` });
+    useStore.getState().settleNode(nodeId, linkPending);
   }
 }

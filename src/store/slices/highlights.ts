@@ -33,11 +33,14 @@ export const createHighlightSlice: StateCreator<StoreState, [], [], HighlightSli
   },
 
   setHighlightMode: (nodeId: string, mode: 'off' | 'tag' | 'filter') => {
+    // 'filter' changes what downstream reads: a step
+    get().pushHistory();
     set((state) => ({
       nodes: state.nodes.map((n) =>
         n.id === nodeId ? { ...n, data: { ...n.data, highlightMode: mode } } : n
       ),
     }));
+    get().pushHistory();
   },
 
   // Material nodes (file / note / link) have no responses[] to index into —

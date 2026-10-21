@@ -35,12 +35,15 @@ export default function RecallSection({ nodeId, items, meta, recallOn, progress 
     setMore('busy');
     try { const n = await recallMore(nodeId); setMore(n === 0 ? 'none' : 'idle'); } catch { setMore('idle'); }
   };
+  // leaving an item out changes the context: a step
   const toggle = (id: string) => {
+    useStore.getState().pushHistory();
     useStore.setState((s) => ({
       nodes: s.nodes.map((n) => (n.id === nodeId
         ? { ...n, data: { ...n.data, recallItems: (n.data.recallItems ?? []).map((i) => (i.id === id ? { ...i, excluded: !i.excluded } : i)) } }
         : n)),
     }));
+    useStore.getState().pushHistory();
   };
   const total = recallTokens(items);
   const included = (items ?? []).filter((i) => !i.excluded);

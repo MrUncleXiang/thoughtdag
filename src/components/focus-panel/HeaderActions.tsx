@@ -40,6 +40,7 @@ export default function HeaderActions({ nodeId, isLoading }: { nodeId: string; i
       nodes: st.nodes.map((n) => (n.id === nodeId
         ? { ...n, data: { ...n.data, question: n.data.source!.question, response: n.data.source!.response } } : n)),
     }));
+    s.pushHistory();
     toast('success', t('panel.reverted'));
   };
 

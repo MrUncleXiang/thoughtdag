@@ -15,6 +15,9 @@ import { isViewerMode } from '../lib/viewer';
 // Color is a FIXED palette (no picker): frames are pure navigation objects,
 // so color is function, not decoration (palette lives in lib/constants).
 
+/** Resizing is a step of its own: settle before, record after. */
+const recordStep = () => useStore.getState().pushHistory();
+
 export default function FrameNode({ id, data, selected }: NodeProps<ThoughtNodeType>) {
   const t = useT();
   const deleteNode = useStore((s) => s.deleteNode);
@@ -45,6 +48,7 @@ export default function FrameNode({ id, data, selected }: NodeProps<ThoughtNodeT
     if (draft === data.question) return;
     useStore.getState().pushHistory();
     patch({ question: draft });
+    useStore.getState().pushHistory();
   };
 
   return (
@@ -85,7 +89,7 @@ export default function FrameNode({ id, data, selected }: NodeProps<ThoughtNodeT
         {/* Carry toggle — always visible: it changes what dragging does, and
             dragging doesn't require selecting first */}
         {!isViewerMode && <button
-          onClick={(e) => { e.stopPropagation(); useStore.getState().pushHistory(); patch({ frameCarry: !carry }); }}
+          onClick={(e) => { e.stopPropagation(); useStore.getState().pushHistory(); patch({ frameCarry: !carry }); useStore.getState().pushHistory(); }}
           title={carry ? t('frame.carryOn') : t('frame.carryOff')}
           className={`rounded-full w-6 h-6 flex items-center justify-center transition-colors shrink-0 nodrag ${
             carry ? 'text-ink-muted hover:text-ink' : 'text-ink-faint/60 hover:text-ink-muted'
@@ -103,7 +107,7 @@ export default function FrameNode({ id, data, selected }: NodeProps<ThoughtNodeT
                 {Object.entries(FRAME_COLORS).map(([name, c]) => (
                   <button
                     key={name}
-                    onClick={(e) => { e.stopPropagation(); patch({ frameColor: name }); }}
+                    onClick={(e) => { e.stopPropagation(); useStore.getState().pushHistory(); patch({ frameColor: name }); useStore.getState().pushHistory(); }}
                     className={`w-3.5 h-3.5 rounded-full ${c.dot} transition-transform hover:scale-125 ${
                       (data.frameColor ?? 'gray') === name ? 'ring-2 ring-offset-1 ring-ink/40' : ''
                     }`}
@@ -131,7 +135,7 @@ export default function FrameNode({ id, data, selected }: NodeProps<ThoughtNodeT
       {/* resize handles: NO manual scaling — React Flow's autoScale already
           counter-scales them (Math.max(1/zoom, 1)), so they keep a constant
           screen size; scaling here again would compound to huge squares */}
-      <NodeResizer isVisible={selected && !isViewerMode} minWidth={280} minHeight={180} lineClassName="!border-accent/40" handleClassName="!bg-accent !w-2.5 !h-2.5 !rounded-sm" />
+      <NodeResizer isVisible={selected && !isViewerMode} minWidth={280} minHeight={180} onResizeStart={recordStep} onResizeEnd={recordStep} lineClassName="!border-accent/40" handleClassName="!bg-accent !w-2.5 !h-2.5 !rounded-sm" />
     </div>
   );
 }

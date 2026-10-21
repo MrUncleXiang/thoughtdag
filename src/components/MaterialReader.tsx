@@ -560,6 +560,7 @@ function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: 
     if (!pdfAtt || v === (pdfAtt.extractedText ?? '')) return;
     useStore.getState().pushHistory();
     useStore.getState().setAttachmentData(node.id, pdfAtt.id, { extractedText: v, extractedBy: 'manual' });
+    useStore.getState().pushHistory();
   };
 
   // ── questions grown from this material ──

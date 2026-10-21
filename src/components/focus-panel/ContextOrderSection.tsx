@@ -35,6 +35,7 @@ export default function ContextOrderSection({ nodeId }: { nodeId: string }) {
     useStore.setState((s) => ({
       edges: s.edges.map((e) => (orderOf.has(e.id) ? { ...e, data: { ...e.data, contextOrder: orderOf.get(e.id)! } } : e)),
     }));
+    store.pushHistory();
     store.recomputeStaleness();
   };
 

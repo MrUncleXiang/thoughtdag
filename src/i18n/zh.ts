@@ -1025,6 +1025,7 @@ export const zh: Record<keyof typeof en, string> = {
   'question.editCancel': '取消',
   'question.editSubmit': '提交并生成',
   'toast.noModelYet': '还没有连接模型。选一家服务商填 key，然后回到节点点重试。',
+  'toast.undoWhileGenerating': '这一步的回答还在生成。等它生成完，或先停止生成，再撤销。',
   'toast.rateLimited': '模型限流了这次请求（免费档按分钟限速）。等半分钟，回到节点点重试。',
   'toast.contextOverWindow': '上下文约 {est} tokens，超出 {model} 的窗口（{limit}）。换个窗口更大的模型，或修剪连线和附件。',
   'toast.visionRerouted': '「{from}」不能看图，这次由「{to}」代答。',

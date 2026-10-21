@@ -74,7 +74,14 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
   };
   const [branchFromText, setBranchFromText] = useState('');
   const [branchYRatio, setBranchYRatio] = useState(0.5);
-  const [editValue, setEditValue] = useState(data.question);
+  // An ask node's first question lives in the shared drafts until sent, like
+  // the follow-up box: undoing the node and redoing it brings the words back.
+  const askDraftKey = `ask:${id}`;
+  const [editValue, setEditValueState] = useState(() => data.question || useUiStore.getState().drafts[askDraftKey] || '');
+  const setEditValue = (v: string) => {
+    setEditValueState(v);
+    if (!data.question) useUiStore.getState().setDraft(askDraftKey, v);
+  };
   const [editResponseValue, setEditResponseValue] = useState(data.response);
   const responseRef = useRef<HTMLDivElement>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -252,6 +259,7 @@ export default function ThoughtNode({ id, data }: NodeProps<ThoughtNodeType>) {
     } else {
       editQuestion(id, editValue.trim());
     }
+    useUiStore.getState().setDraft(askDraftKey, '');
   };
 
   const handleResponseEditSubmit = () => {

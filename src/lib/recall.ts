@@ -56,7 +56,8 @@ export async function citeHit(hit: Pick<WhyFindHit, 'session' | 'turn' | 'open'>
   const position = target ? { x: target.position.x - 460, y: target.position.y } : freeSpot(st.nodes);
   const node = buildContentNode('note', position, { question: recalledMarkdown(r) });
   node.data.recallSource = { kind: r.kind, runner: r.runner, session: r.session, turn: r.turn, title: r.title, file: r.file, ...(r.at ? { at: r.at } : {}), open: hit.open, cwd: r.cwd };
-  st.setNodes([...st.nodes, node]);
+  st.pushHistory();
+  st.setNodes([...useStore.getState().nodes, node]);
   if (target) useStore.getState().addCrossLink(node.id, target.id);
   useStore.getState().pushHistory();
   toast('success', t(target ? 'recall.cited' : 'recall.citedLoose'), 6000);

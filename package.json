@@ -12,6 +12,7 @@
     "test:layout": "node scripts/test-layout.mjs",
     "test:backup": "node scripts/test-backup-write.mjs",
     "test:inject-source": "node scripts/test-inject-source.mjs",
+    "test:undo": "node scripts/test-undo.mjs",
     "preview": "vite preview",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

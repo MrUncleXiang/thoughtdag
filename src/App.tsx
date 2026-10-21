@@ -37,6 +37,7 @@ import MaterialReader from './components/MaterialReader';
 import ProjectSwitcher from './components/ProjectSwitcher';
 import SessionAtlas from './components/SessionAtlas';
 import { useStore } from './store';
+import { undoState } from './store/slices/history';
 import { shownStaleIds } from './lib/stale-judge';
 import { frameMembers } from './lib/frames';
 import { useProjects, adoptImportedProject, markInstantiatedFrom } from './store/projects';
@@ -210,6 +211,7 @@ export default function App() {
 
 function Canvas() {
   const { nodes, edges, setNodes, setEdges, addQuestion, undo, redo, addCrossLink, setSelectedNodeId, setSelectedNodeIds, history, historyIndex, relayout } = useStore();
+  const undoable = undoState({ nodes, edges, history, historyIndex });
   const t = useT();
   const setTutorialOpen = useUiStore((s) => s.setTutorialOpen);
   const annotationsHidden = useUiStore((s) => s.annotationsHidden);
@@ -296,6 +298,7 @@ function Canvas() {
   const loadExample = useCallback(() => {
     const { nodes: exNodes, edges: exEdges } = buildExampleGraph(lang);
     const st = useStore.getState();
+    st.pushHistory();
     st.setNodes([...st.nodes, ...exNodes.filter((n) => !st.nodes.some((x) => x.id === n.id))]);
     st.setEdges([...st.edges, ...exEdges.filter((e) => !st.edges.some((x) => x.id === e.id))]);
     st.pushHistory();
@@ -324,6 +327,7 @@ function Canvas() {
     const last = st.nodes[st.nodes.length - 1];
     const pos = last ? { x: last.position.x, y: last.position.y + 340 } : { x: 120, y: 80 };
     const id = generateId();
+    st.pushHistory();
     st.setNodes([...st.nodes, {
       id, type: 'thought', position: pos, dragHandle: '.drag-handle',
       data: {
@@ -358,6 +362,7 @@ function Canvas() {
   const spawnFrame = useCallback((pos: { x: number; y: number }) => {
     const st = useStore.getState();
     const id = generateId();
+    st.pushHistory();
     st.setNodes([...st.nodes, {
       id, type: 'thought', position: pos, width: 640, height: 420, zIndex: -1, dragHandle: '.drag-handle',
       data: {
@@ -393,9 +398,11 @@ function Canvas() {
 
   // Ask node: an ordinary Q&A node dropped EMPTY — wire material in, then
   // type the question; it answers from whatever the edges carry.
-  const spawnAskNode = useCallback((pos: { x: number; y: number }): string => {
+  // record=false: the caller makes the node part of a larger step and records it
+  const spawnAskNode = useCallback((pos: { x: number; y: number }, record = true): string => {
     const st = useStore.getState();
     const id = generateId();
+    if (record) st.pushHistory();
     st.setNodes([...st.nodes, {
       id, type: 'thought', position: pos, dragHandle: '.drag-handle',
       data: {
@@ -409,7 +416,7 @@ function Canvas() {
         // its question box, and what is set there must be what the ask uses
       },
     }]);
-    st.pushHistory();
+    if (record) st.pushHistory();
     return id;
   }, []);
   // Material-first entry: every dropped document becomes a material node;
@@ -563,6 +570,8 @@ function Canvas() {
   // delta from ITS start position, so there is no incremental drift.
   const frameDrag = useRef<{ frameId: string; start: { x: number; y: number }; members: { id: string; start: { x: number; y: number } }[] } | null>(null);
   const onNodeDragStart: OnNodeDrag<ThoughtNodeType> = useCallback((_e, node) => {
+    // a move is a step of its own: settle anything unrecorded before it
+    useStore.getState().pushHistory();
     // unlinked frames (frameCarry === false) move alone — the state while
     // the frame itself is still being adjusted over its nodes
     if (node.data.stepKind !== 'frame' || node.data.frameCarry === false) return;
@@ -591,7 +600,11 @@ function Canvas() {
       }),
     }));
   }, []);
-  const onNodeDragStop: OnNodeDrag<ThoughtNodeType> = useCallback(() => { frameDrag.current = null; }, []);
+  const onNodeDragStop: OnNodeDrag<ThoughtNodeType> = useCallback(() => {
+    frameDrag.current = null;
+    useStore.getState().pushHistory();
+  }, []);
+  const recordMove = useCallback(() => useStore.getState().pushHistory(), []);
 
   // Edge right-click context menu
   const [edgeMenu, setEdgeMenu] = useState<{ x: number; y: number; edgeId: string } | null>(null);
@@ -672,7 +685,9 @@ function Canvas() {
     const pos = flowPosAt({ x: clientX, y: clientY });
     const st = useStore.getState();
     if (st.nodes.find((n) => n.id === parentId)?.data.stepKind === 'frame') return;
-    const newId = spawnAskNode(pos);
+    // the node and the wire into it are one step
+    st.pushHistory();
+    const newId = spawnAskNode(pos, false);
     st.setEdges([...useStore.getState().edges, {
       id: `edge-${parentId}-${newId}`,
       source: parentId,
@@ -717,9 +732,17 @@ function Canvas() {
       if (useUiStore.getState().confirmRequest) return;
       // Viewer: only Cmd+F search survives; every mutating shortcut is inert
       if (isViewerMode && !((e.metaKey || e.ctrlKey) && e.key === 'f')) return;
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-        if (e.shiftKey) { e.preventDefault(); redo(); }
-        else { e.preventDefault(); undo(); }
+      // Undo belongs to a text field while it has focus: the field takes back
+      // its own typing, and the canvas steps once the edit is committed.
+      // Redo answers to Shift+Cmd/Ctrl+Z (the key reads 'Z' with Shift held
+      // on some systems) and to Ctrl+Y.
+      const key = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && (key === 'z' || (key === 'y' && e.ctrlKey && !e.metaKey))) {
+        const field = e.target as HTMLElement;
+        if (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA' || field.isContentEditable) return;
+        e.preventDefault();
+        if (key === 'y' || e.shiftKey) redo(); else undo();
+        return;
       }
       // Cmd+F: node search (replaces browser find on the canvas)
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -1167,6 +1190,8 @@ function Canvas() {
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
+        onSelectionDragStart={recordMove}
+        onSelectionDragStop={recordMove}
         onConnect={onConnect}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
@@ -1989,7 +2014,7 @@ function Canvas() {
         </div>
         <button
           onClick={undo}
-          disabled={historyIndex <= 0}
+          disabled={!undoable.canUndo}
           className="bg-card/90 backdrop-blur border border-line rounded-lg w-8 h-8 flex items-center justify-center shadow-sm hover:bg-wash transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
           title={t('canvas.undo')}
         >
@@ -1997,7 +2022,7 @@ function Canvas() {
         </button>
         <button
           onClick={redo}
-          disabled={historyIndex >= history.length - 1}
+          disabled={!undoable.canRedo}
           className="bg-card/90 backdrop-blur border border-line rounded-lg w-8 h-8 flex items-center justify-center shadow-sm hover:bg-wash transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
           title={t('canvas.redo')}
         >

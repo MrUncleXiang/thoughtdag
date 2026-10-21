@@ -24,6 +24,11 @@ import { recallSourceLine } from '../lib/recall';
 // them. In a paradigm, an empty content node is a MATERIAL SLOT: the
 // cascade waits until the human fills it, like a human turn.
 
+/** Where an unresized note stops growing: the answer box's cap. */
+const NOTE_BODY_MAX = 400;
+/** Resizing is a step of its own: settle before, record after. */
+const recordStep = () => useStore.getState().pushHistory();
+
 export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNodeType>) {
   const t = useT();
   const deleteNode = useStore((s) => s.deleteNode);
@@ -50,6 +55,8 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
   useEffect(() => { updateNodeInternals(id); }, [glyphTier, id, updateNodeInternals]);
 
   const kind = data.stepKind === 'file' ? 'file' : data.stepKind === 'link' ? 'link' : 'note';
+  // a height of the card's own (the corner handle) vs. the measured one React Flow passes in props
+  const resized = useStore((s) => s.nodes.find((n) => n.id === id)?.height != null);
   const [editing, setEditing] = useState(!isViewerMode && kind === 'note' && !data.question);
   const [draft, setDraft] = useState(data.question);
   const [openExtract, setOpenExtract] = useState<string | null>(null); // attId whose extraction panel is open
@@ -66,6 +73,7 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
     useStore.setState((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, question: text, tokenCount: countTokens(text) } } : n)),
     }));
+    useStore.getState().pushHistory();
     // Filling a material slot advances a waiting paradigm run (idempotent)
     triggerParadigmCascade(useStore.getState, id);
   };
@@ -240,9 +248,11 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
         </div>
       </div>
 
-      {/* Body: grows with content by default; when the card is resized the
-          body becomes the scroll region (wheel scrolls text, not zoom) */}
-      <div className="px-4 py-3 nodrag flex-1 min-h-0 overflow-y-auto nowheel">
+      {/* Body: grows with content by default, a note up to the answer box's
+          height (a long note would otherwise cover the cards below it once
+          the canvas zooms in); when the card is resized the body becomes the
+          scroll region (wheel scrolls text, not zoom) */}
+      <div className="px-4 py-3 nodrag flex-1 min-h-0 overflow-y-auto nowheel" style={kind === 'note' && !resized ? { maxHeight: NOTE_BODY_MAX } : undefined} data-content-body>
         {/* a quote from the why layer says where it came from, above its text */}
         {kind === 'note' && data.recallSource && (
           <div className="text-2xs text-ink-faint font-mono truncate mb-1.5" title={data.recallSource.file} data-recall-source>
@@ -355,7 +365,8 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
                         onBlur={(e) => {
                           if (e.target.value !== att.extractedText) {
                             useStore.getState().pushHistory();
-                            setAttachmentData(id, att.id, { extractedText: e.target.value });
+                            setAttachmentData(id, att.id, { extractedText: e.target.value, extractedBy: 'manual' });
+                            useStore.getState().pushHistory();
                           }
                         }}
                         rows={7}
@@ -447,6 +458,8 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
           minWidth={320}
           maxWidth={860}
           minHeight={120}
+          onResizeStart={recordStep}
+          onResizeEnd={recordStep}
           style={{ background: 'transparent', border: 'none', width: 18, height: 18 }}
         >
           <MoveDiagonal2 size={13} strokeWidth={1.75} className="text-ink-faint absolute bottom-0.5 right-0.5" />

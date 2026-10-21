@@ -128,7 +128,7 @@ type Get = StoreApi<StoreState>['getState'];
  * The one streaming pipeline for filling a node's response:
  * register an AbortController (Stop button) → stream chunks into
  * `data.response` → on completion write response/versions/tokenCount and
- * collapse → pushHistory → kick off the background summary.
+ * collapse → settleNode → kick off the background summary.
  * On abort or error, whatever streamed so far is kept.
  */
 export async function runNodeGeneration(
@@ -143,7 +143,7 @@ export async function runNodeGeneration(
     versionMode?: 'replace' | 'append';
     /** True when fired by the auto-refresh chain; manual generations reset all budgets. */
     autoChain?: boolean;
-    /** Extra work after the final state write, before pushHistory (e.g. re-layout). */
+    /** Extra work after the final state write, before settleNode (e.g. re-layout). */
     onSuccess?: (response: string) => void;
     /** where each context message came from — the members of this request */
     sources?: MessageSource[];
@@ -524,7 +524,7 @@ export async function runNodeGeneration(
       await stampHarnessTurn(set, get, nodeId, { question, response }, harnessRoute, harnessSession, harnessTurn, ledgerAdvanced);
     }
     onSuccess?.(response);
-    get().pushHistory();
+    get().settleNode(nodeId);
     // The ladder sees the thread as its own plaques (lib/ladder-context.ts), not the compiled conversation: in the
     // 09-27 comparison the two read alike, and resending the conversation cost several times the plaque lines. Every
     // route (API model, agent, harness) and every later update (right-click, lasso) thus writes from the same view.
@@ -566,7 +566,7 @@ export async function runNodeGeneration(
       }
       writeFinal(partial || t('node.failedPlaceholder'), true);
     }
-    get().pushHistory();
+    get().settleNode(nodeId);
   }
 }
 
