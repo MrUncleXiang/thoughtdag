@@ -35,6 +35,8 @@
       "preload.js",
       "package.json",
       "splash.html",
+      "tray.png",
+      "tray@2x.png",
       "agents/**"
     ],
     "extraResources": [

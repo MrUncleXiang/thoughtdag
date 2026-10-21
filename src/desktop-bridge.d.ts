@@ -13,6 +13,8 @@ interface DesktopBridge {
   downloadUpdate?: () => Promise<void>;
   installUpdate?: () => Promise<void>;
   onUpdateEvent?: (cb: (e: DesktopUpdateEvent) => void) => void;
+  /** Windows and Linux shells only: whether closing the window keeps the app in the tray; `on` sets it, `labels` name the tray menu. */
+  tray?: (req?: { on?: boolean; labels?: { open: string; quit: string } }) => Promise<{ closeToTray: boolean }>;
 }
 
 // Fenced read-only primitives over the runner session stores (main.js

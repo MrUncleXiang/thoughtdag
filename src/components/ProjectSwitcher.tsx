@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, ChevronDown, Dna, FolderOpen, Loader2, Map as MapIcon, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { Archive, Check, ChevronDown, Dna, FolderOpen, Loader2, Map as MapIcon, Minimize2, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import SessionAtlas from './SessionAtlas';
 import HarnessViewSwitch from './ui/HarnessViewSwitch';
 import { knownSessionIds } from '../lib/atlas/discover';
@@ -31,6 +31,17 @@ export default function ProjectSwitcher({ onSwitched }: { onSwitched: () => void
   const switching = useProjects((s) => s.switching);
   const activeIsParadigm = projects.find((p) => p.id === activeId)?.kind === 'paradigm';
   const [open, setOpen] = useState(false);
+  // Windows and Linux shells: keep running in the tray when the window
+  // closes (#77); the tray menu speaks the page's language
+  const lang = useI18n((s) => s.lang);
+  const [closeToTray, setCloseToTray] = useState<boolean | null>(null);
+  useEffect(() => {
+    const tray = window.desktop?.tray;
+    if (!tray) return;
+    let alive = true;
+    void tray({ labels: { open: ti('tray.open'), quit: ti('tray.quit') } }).then((r) => { if (alive) setCloseToTray(r.closeToTray); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [lang]);
   const [chatImport, setChatImport] = useState<ImportableConversation[] | null>(null);
   const [atlasOpen, setAtlasOpen] = useState(false);
   const [atlasFocus, setAtlasFocus] = useState<string | undefined>(undefined);
@@ -224,6 +235,21 @@ export default function ProjectSwitcher({ onSwitched }: { onSwitched: () => void
                 <span className="ml-auto text-2xs text-ink-faint">
                   v{new URLSearchParams(window.location.search).get('dv')}
                 </span>
+              </button>
+            )}
+            {window.desktop?.tray && closeToTray !== null && (
+              <button
+                onClick={() => {
+                  const on = !closeToTray;
+                  setCloseToTray(on);
+                  void window.desktop!.tray!({ on }).then((r) => setCloseToTray(r.closeToTray)).catch(() => setCloseToTray(!on));
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-ink-muted hover:bg-wash transition-colors flex items-center gap-2"
+                title={t('switcher.closeToTrayHint')}
+                data-close-to-tray={closeToTray ? 'on' : 'off'}
+              >
+                <Minimize2 size={15} strokeWidth={1.75} /> {t('switcher.closeToTray')}
+                {closeToTray && <Check size={14} strokeWidth={2} className="ml-auto text-accent" />}
               </button>
             )}
             <input

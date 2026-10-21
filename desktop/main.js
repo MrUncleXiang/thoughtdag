@@ -2,7 +2,7 @@
 // the bundled server.mjs runs as a child, serves the built dist on a
 // local port, and this window points at it. No second stack: everything
 // the web app is, the desktop app is.
-const { app, BrowserWindow, shell, utilityProcess, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, utilityProcess, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const net = require('net');
 const os = require('os');
@@ -42,6 +42,65 @@ function whyLib() {
 }
 let serverProc = null;
 let win = null;
+
+// Closing the window hides it: the page is where answers stream and unsent
+// drafts live, so it keeps running. On macOS always (the Dock brings it
+// back, Cmd+Q quits); on Windows and Linux when the person keeps the app in
+// the tray (#77). Quitting from a menu, the tray or an update install
+// closes for real.
+let quitting = false;
+let tray = null;
+let shellPrefs = null;
+const shellPrefsFile = () => path.join(app.getPath('userData'), 'shell-prefs.json');
+function prefs() {
+  if (!shellPrefs) {
+    try { shellPrefs = JSON.parse(require('fs').readFileSync(shellPrefsFile(), 'utf8')); } catch { shellPrefs = {}; }
+  }
+  return shellPrefs;
+}
+const hidesOnClose = () => process.platform === 'darwin' || !!prefs().closeToTray;
+
+function showWindow() {
+  if (!win || win.isDestroyed()) { void boot(); return; }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function syncTray() {
+  if (process.platform === 'darwin') return;
+  if (!prefs().closeToTray) { tray?.destroy(); tray = null; return; }
+  if (!tray) {
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'tray.png')));
+    tray.setToolTip('ThoughtDAG');
+    tray.on('click', showWindow);
+  }
+  // the page sends its own words for the menu, in the language it shows
+  const labels = prefs().trayLabels ?? {};
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: labels.open || 'Open ThoughtDAG', click: showWindow },
+    { type: 'separator' },
+    { label: labels.quit || 'Quit', click: () => app.quit() },
+  ]));
+}
+
+function setupShell() {
+  ipcMain.handle('shell:tray', async (_e, req) => {
+    if (process.platform === 'darwin') return { closeToTray: false };
+    const next = {};
+    if (typeof req?.on === 'boolean') next.closeToTray = req.on;
+    if (typeof req?.labels?.open === 'string' && typeof req?.labels?.quit === 'string') {
+      next.trayLabels = { open: req.labels.open.slice(0, 60), quit: req.labels.quit.slice(0, 60) };
+    }
+    if (Object.keys(next).length) {
+      shellPrefs = { ...prefs(), ...next };
+      await fsp.writeFile(shellPrefsFile(), JSON.stringify(shellPrefs));
+    }
+    syncTray();
+    return { closeToTray: !!prefs().closeToTray };
+  });
+  syncTray();
+}
 
 // first free port from a quiet base — never collide with dev servers
 function freePort(start = 31173) {
@@ -88,6 +147,13 @@ async function boot() {
   });
   // splash first: the window exists from the first moment, breathing,
   // while the bundled server warms up behind it
+  const w = win;
+  w.on('close', (e) => {
+    if (quitting || !hidesOnClose()) return;
+    e.preventDefault();
+    w.hide();
+  });
+  w.on('closed', () => { if (win === w) win = null; });
   win.loadFile(path.join(__dirname, 'splash.html'));
   // external links belong to the system browser, not this window
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -698,7 +764,8 @@ function setupAutoUpdate() {
     });
   });
   ipcMain.handle('update:install', () => {
-    if (downloadedInfo) updater.quitAndInstall();
+    // an update install closes the windows before before-quit fires
+    if (downloadedInfo) { quitting = true; updater.quitAndInstall(); }
   });
 }
 
@@ -926,12 +993,13 @@ if (!lock) {
   app.on('open-url', (e, url) => { e.preventDefault(); deliverDeepLink(url); });
   ipcMain.handle('sessions:pending-deeplink', () => { const l = pendingDeepLink; pendingDeepLink = null; return l; });
   app.on('second-instance', (_e, argv) => {
-    if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+    if (win && !win.isDestroyed()) showWindow();
     const link = argv.find((a) => typeof a === 'string' && a.startsWith('thoughtdag://'));
     if (link) deliverDeepLink(link);
   });
   app.whenReady().then(() => {
     void boot();
+    setupShell();
     setupSessionAtlas();
     setupAgents();
     if (app.isPackaged) {
@@ -941,7 +1009,9 @@ if (!lock) {
       ipcMain.handle('update:check', () => { sendUpdate({ kind: 'dev' }); });
     }
   });
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) boot(); });
+  // the Dock click brings back the hidden window rather than booting a second server
+  app.on('activate', () => { if (win && !win.isDestroyed()) showWindow(); else if (BrowserWindow.getAllWindows().length === 0) boot(); });
+  app.on('before-quit', () => { quitting = true; });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   app.on('will-quit', () => { serverProc?.kill(); if (codexRpc && codexRpc !== 'dead') codexRpc.proc.kill(); for (const r of runtimes.values()) r.shutdown(); });
 }

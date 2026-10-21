@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('desktop', {
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateEvent: (cb) => { ipcRenderer.on('update:event', (_e, data) => cb(data)); },
+  // Windows and Linux: keep running in the tray when the window closes
+  // (#77). macOS hides on close by itself, so the page offers no switch there.
+  ...(process.platform === 'darwin' ? {} : { tray: (req) => ipcRenderer.invoke('shell:tray', req) }),
 });
 
 // Session atlas: fenced read-only primitives over the runner session
