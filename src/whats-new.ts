@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
+    version: '0.5.24',
+    date: '2026-10-22',
+    announce: false,
+    lead: {
+      zh: 'Agent 回答的节点重新有了摘要和类型标记。摘要、材料标签、记忆这类后台调用统一挑模型：不交给 Agent，一个模型出错就换下一个，接口不接受关闭思考时改发普通请求。所有模型都没有回应时会提示一次，右键节点选「更新节点摘要」可以重试；批量更新连续三个节点没有回应会停下并说明原因。识图和 PDF 识字只用普通模型，并设了超时。缩放摘要不再把小标题和表格行当成句子。',
+      en: 'Nodes answered by an agent get their summaries and move badges again. Background calls such as summaries, material labels and memory pick models one way: never an agent, the next model when one fails, and an ordinary request when an interface does not take the switch that turns thinking off. When no model answers you hear it once, and right-click, Update node summary, tries again; a batch update stops after three nodes in a row without an answer and says why. Image text and PDF pages are read by ordinary models only, with a time limit. Zoom summaries no longer take headings and table rows for sentences.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
     version: '0.5.23',
     date: '2026-10-22',
     announce: false,
