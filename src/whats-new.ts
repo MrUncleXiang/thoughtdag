@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
+    version: '0.5.23',
+    date: '2026-10-22',
+    announce: false,
+    lead: {
+      zh: '可以把 .ipynb 拖进画布当材料。阅读器的原版视图按单元格显示文字、代码、保存的输出和图；提取文本视图是模型读到的内容。保存的输出作为作者上次运行的记录交给模型，问到改参数再跑时，模型会说明该怎么跑。图随上下文发给能看图的模型，也可以切换为仅文本。',
+      en: 'Drop a .ipynb on the canvas as material. The reader\'s original view shows its cells as the author left them: text, code, saved outputs and figures; the text view shows what the model reads. Saved outputs reach the model as a record of the author\'s last run, so asked to change a parameter and run again, it says what to run. Figures go along to models that can see images, or switch to text only.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
     version: '0.5.22',
     date: '2026-10-21',
     announce: false,
