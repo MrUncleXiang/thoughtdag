@@ -14,8 +14,11 @@ export interface Attachment {
   extractedText?: string; // companion text (PDF extraction / image auto-understanding)
   extractedBy?: string; // which model produced extractedText (extraction provenance)
   pageImages?: string[]; // rendered page images as base64 PNG (PDF)
+  /** a notebook's figures, in output order — the image channel of a .ipynb
+      (its extractedText names them [figure N]) */
+  figures?: { data: string; mimeType: string }[];
   numPages?: number; // PDF page count
-  renderMode?: 'full' | 'text-only'; // PDF: include page images or text only
+  renderMode?: 'full' | 'text-only'; // PDF, image or notebook: include the pictures or text only
   isExtracting?: boolean; // PDF extraction in progress
   digest?: string; // reader's guided digest (markdown, with (p.N) anchors)
   digestBy?: string; // model that wrote the digest

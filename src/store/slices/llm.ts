@@ -13,6 +13,7 @@ import { shownStaleIds } from '../../lib/stale-judge';
 import { t, fmt } from '../../i18n';
 import type { StoreState, LlmSlice, AddQuestionOptions } from '../types';
 import { condenseGuard } from '../../lib/condense-guard';
+import { isNotebook, notebookContext } from '../../lib/notebook';
 
 export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, get) => ({
   addQuestion: async (question: string, opts: AddQuestionOptions = {}) => {
@@ -135,7 +136,7 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
     // Collect this node's own attachments (skip if same file already from ancestors)
     const selfAttachments = selfNode?.data.attachments || [];
     for (const att of selfAttachments) {
-      const alreadyInContext = contextMessages.some(m => m.content.includes(`[PDF: ${att.name}]`) || m.content.includes(`[File: ${att.name}]`));
+      const alreadyInContext = contextMessages.some(m => m.content.includes(`[PDF: ${att.name}]`) || m.content.includes(`[File: ${att.name}]`) || m.content.startsWith(`[Notebook: ${att.name} — `));
       if (alreadyInContext) continue;
       if (att.type.startsWith('image/')) {
         contextImages.push({ data: att.content, mimeType: att.type });
@@ -148,6 +149,12 @@ export const createLlmSlice: StateCreator<StoreState, [], [], LlmSlice> = (set, 
         // extracted Markdown only — raw HTML source never reaches a model
         if (att.extractedText?.trim()) {
           contextMessages.push({ role: 'user', content: `[File: ${att.name}]\n${att.extractedText}` });
+        }
+      } else if (isNotebook(att)) {
+        // converted cells only — the raw JSON (base64 figures and all) never reaches a model
+        if (att.extractedText?.trim()) contextMessages.push({ role: 'user', content: notebookContext(att) });
+        if (att.renderMode !== 'text-only') {
+          for (const f of att.figures ?? []) contextImages.push({ data: f.data, mimeType: f.mimeType, hasCompanion: true });
         }
       } else if (att.content) {
         contextMessages.push({ role: 'user', content: `[File: ${att.name}]\n${att.content}` });

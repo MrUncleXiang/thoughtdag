@@ -1,6 +1,7 @@
 import type { ThoughtNode } from '../types';
 import { confirmDialog } from './ui-store';
 import { t, fmt } from '../i18n';
+import { isNotebook } from './notebook';
 
 // Sensitive-content gate for the EXIT doors (share links, exports).
 // Mirrored CLI sessions carry tool output — env dumps, keys, tokens —
@@ -43,7 +44,8 @@ export function scanNodes(nodes: ThoughtNode[]): SensitiveHit[] {
     scanText(n.data.question, label, hits);
     for (const r of n.data.responses ?? []) scanText(r, label, hits);
     for (const a of n.data.attachments ?? []) {
-      if (!a.type.startsWith('image/')) scanText(a.content, `${label} · ${a.name}`, hits);
+      // a notebook's raw JSON sits in the vault; its cells and outputs are the extracted text
+      if (!a.type.startsWith('image/')) scanText(isNotebook(a) ? a.extractedText ?? '' : a.content, `${label} · ${a.name}`, hits);
     }
     if (hits.length >= 20) break;
   }

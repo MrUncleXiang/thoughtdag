@@ -4,6 +4,7 @@ import { generateId } from '../utils';
 import { extractPdf } from './api';
 import { PDF_VISION_PAGE_THRESHOLD } from './constants';
 import { internAttachment } from './attachment-vault';
+import { NOTEBOOK_EXTENSION, NOTEBOOK_FIGURE_THRESHOLD, NOTEBOOK_TYPE, isNotebook, notebookMaterial, parseNotebook } from './notebook';
 import { toast } from './ui-store';
 import { t } from '../i18n';
 
@@ -30,7 +31,7 @@ const OFFICE_EXPORT_HINT = /\.(pptx?|key|odp|doc|rtf|odt|xlsx?|numbers|ods)$/i;
 
 // accept attribute for <input type="file"> — keep in sync with TEXT_EXTENSIONS
 export const FILE_INPUT_ACCEPT =
-  'image/*,.pdf,.txt,.md,.js,.ts,.tsx,.jsx,.py,.json,.csv,.yaml,.yml,.toml,.sh,.c,.cpp,.h,.java,.rs,.go,.rb,.swift,.css,.html,.htm,.xml,.sql';
+  'image/*,.pdf,.ipynb,.txt,.md,.js,.ts,.tsx,.jsx,.py,.json,.csv,.yaml,.yml,.toml,.sh,.c,.cpp,.h,.java,.rs,.go,.rb,.swift,.css,.html,.htm,.xml,.sql';
 
 // Identity of an attachment's content — used to dedup the same file uploaded
 // to multiple nodes or reached via multiple DAG paths.
@@ -47,6 +48,7 @@ export function readFileToAttachment(file: File): Promise<Attachment | null> {
     const isImage = file.type.startsWith('image/');
     const isPDF = file.type === 'application/pdf' || file.name.endsWith('.pdf');
     const isHTML = file.type === 'text/html' || HTML_EXTENSIONS.test(file.name);
+    const isNotebookFile = NOTEBOOK_EXTENSION.test(file.name);
     const isText = file.type.startsWith('text/') || TEXT_EXTENSIONS.test(file.name);
     const isDocx = file.name.toLowerCase().endsWith('.docx');
 
@@ -84,6 +86,12 @@ export function readFileToAttachment(file: File): Promise<Attachment | null> {
       // Markdown (extractedText) is produced async in processFile
       file.text().then((text) => {
         resolve({ id, name: file.name, type: 'text/html', size: file.size, addedAt, content: text });
+      });
+    } else if (isNotebookFile) {
+      // raw JSON serves the reader's original view; processFile writes the
+      // model channel (extractedText) and the figures
+      file.text().then((text) => {
+        resolve({ id, name: file.name, type: NOTEBOOK_TYPE, size: file.size, addedAt, content: text });
       });
     } else if (isText) {
       file.text().then((text) => {
@@ -167,6 +175,26 @@ export async function processFile(file: File, cb: ProcessFileCallbacks): Promise
       // material usable (same net the link snapshot route uses)
       cb.update(att.id, { extractedText: stripHtmlTags(att.content), isExtracting: false });
     }
+    return;
+  }
+
+  if (isNotebook(att)) {
+    let material: ReturnType<typeof notebookMaterial>;
+    try {
+      material = notebookMaterial(parseNotebook(att.content));
+    } catch {
+      toast('info', `${file.name}: ${t('content.notebookUnreadable')}`);
+      return;
+    }
+    const light = await internAttachment(att);
+    cb.add({ ...light, isExtracting: true });
+    const n = material.figures.length;
+    cb.update(att.id, {
+      extractedText: material.text,
+      figures: n ? material.figures : undefined,
+      renderMode: n === 0 ? undefined : n > NOTEBOOK_FIGURE_THRESHOLD ? 'text-only' : 'full',
+      isExtracting: false,
+    });
     return;
   }
 

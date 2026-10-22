@@ -2,6 +2,7 @@ import type { Attachment, ThoughtNode } from '../types';
 import type { ThoughtEdge } from '../types';
 import { partitionContext, type ContextReference } from '../lib/graph';
 import { attachmentFingerprint } from '../lib/attachments';
+import { isNotebook, notebookContext, notebookForAgent } from '../lib/notebook';
 import { countTokens } from '../utils';
 import { fuzzyHighlightRegex } from '../lib/highlight-match';
 import type { ContextMessage, ImageAttachment } from '../lib/api';
@@ -118,8 +119,9 @@ const withRecordHeader = (messages: ContextMessage[], header: string): ContextMe
     : m));
 
 /** The same context for an agent request: records keep their contents and
- *  drop the no-tools sentence, which would be false there. */
-export const recordsForAgent = (messages: ContextMessage[]): ContextMessage[] => withRecordHeader(messages, AGENT_RECORD_HEADER);
+ *  drop the no-tools sentence, which would be false there (a notebook's
+ *  saved outputs likewise drop their no-run sentence). */
+export const recordsForAgent = (messages: ContextMessage[]): ContextMessage[] => withRecordHeader(messages, AGENT_RECORD_HEADER).map(notebookForAgent);
 
 /** The same context for a request that declares tools (web or scholarly
  *  search, MCP): the records say which tools this conversation lacks
@@ -376,6 +378,19 @@ function compileContext(
             : `[File: ${att.name} — HTML with no extractable text yet]`,
         });
         sources.push(attSource(att));
+      } else if (isNotebook(att)) {
+        // Notebook: the converted cells are the model channel, the saved
+        // outputs framed as the author's record (lib/notebook.ts); the
+        // figures ride the image channel unless switched to text only, and
+        // their [figure N] lines stand in for a model that cannot see
+        messages.push({ role: 'user', content: notebookContext(att) });
+        sources.push(attSource(att));
+        if (att.renderMode !== 'text-only') {
+          for (const f of att.figures ?? []) {
+            images.push({ data: f.data, mimeType: f.mimeType, hasCompanion: true });
+            imageSources.push({ nodeId: node.id, attachmentId: att.id });
+          }
+        }
       } else if (toolSteps === 'record' && isToolRecord(att)) {
         records.push(att);
       } else {

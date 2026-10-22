@@ -2,6 +2,7 @@ import type { ThoughtNode, ThoughtEdge } from '../types';
 import { buildContext, type MessageSource } from '../store/context-builder';
 import { attachmentFingerprint } from './attachments';
 import { countTokens } from '../utils';
+import { isNotebook } from './notebook';
 
 // Context Bundle v0 — the compiler's portable output: what the target model
 // should see next, and where every piece came from. This file is the
@@ -156,7 +157,9 @@ export async function graphSnapshotHash(nodes: ThoughtNode[], edges: ThoughtEdge
   return `sha256:${await sha256Hex(canonicalStringify(semanticSnapshot(nodes, edges)))}`;
 }
 
-function projectionMode(att: { type: string; extractedText?: string; renderMode?: string }): BundleMaterial['model_projection']['mode'] {
+function projectionMode(att: { type: string; extractedText?: string; renderMode?: string; figures?: unknown[] }): BundleMaterial['model_projection']['mode'] {
+  // a notebook's figures ride beside its converted cells, like an image beside its companion
+  if (isNotebook(att) && att.figures?.length && att.renderMode !== 'text-only') return 'extracted_text+pixels';
   if (att.type.startsWith('image/')) {
     const pixels = att.renderMode !== 'text-only';
     const text = !!att.extractedText?.trim();

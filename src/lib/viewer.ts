@@ -1,4 +1,5 @@
 import type { ThoughtNode, ThoughtEdge } from '../types';
+import { isNotebook } from './notebook';
 
 // Read-only viewer: the link IS the canvas. Graph data travels in the URL
 // hash (#view=<deflate+base64url>), so nothing touches a server and the
@@ -43,15 +44,17 @@ export async function buildViewerLink(nodes: ThoughtNode[], edges: ThoughtEdge[]
         ...n.data,
         isLoading: false, isEditing: false, isEditingResponse: false, reasoning: undefined,
         // Heavy asset bytes stay home: original PDF bytes, rendered page
-        // images and full-size image originals would blow the URL past what
-        // address bars and share intents carry (and sharing a paper's file
-        // is not ours to do). Extracted text, digests and thumbnails travel,
-        // so the visitor still reads everything.
+        // images, a notebook's JSON and figures, and full-size image
+        // originals would blow the URL past what address bars and share
+        // intents carry (and sharing a paper's file is not ours to do).
+        // Extracted text, digests and thumbnails travel, so the visitor
+        // still reads everything.
         attachments: (n.data.attachments ?? []).map((a) => ({
           ...a,
-          content: a.type.startsWith('image/') ? '' : a.type === 'application/pdf' ? '' : a.content,
+          content: a.type.startsWith('image/') || a.type === 'application/pdf' || isNotebook(a) ? '' : a.content,
           contentInVault: undefined,
           pageImages: undefined,
+          figures: undefined,
           isExtracting: false,
         })),
       },

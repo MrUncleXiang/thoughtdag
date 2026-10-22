@@ -35,7 +35,7 @@ const DERIVED: (keyof ThoughtData)[] = ['summary', 'summaries', 'summaryTypes', 
 /** What identifies an answer version while it is still streaming. */
 const VERSION: (keyof ThoughtData)[] = ['question', 'questions', 'responses', 'responseIndex', 'stepKind'];
 /** Attachment fields the app fills in (extraction, digests, the vault); extracted text is the person's once edited by hand. */
-const ATT_MACHINE = new Set<string>(['isExtracting', 'extractedText', 'extractedBy', 'digest', 'digestBy', 'pageImages', 'numPages', 'thumbnailUrl', 'content', 'contentInVault']);
+const ATT_MACHINE = new Set<string>(['isExtracting', 'extractedText', 'extractedBy', 'digest', 'digestBy', 'pageImages', 'figures', 'numPages', 'thumbnailUrl', 'content', 'contentInVault']);
 const NODE_VIEW = new Set<string>(['selected', 'dragging', 'measured', 'resizing', 'data']);
 const SKIP_DATA = new Set<string>([...TRANSIENT, ...SETTINGS, ...DERIVED, 'attachments'] as string[]);
 

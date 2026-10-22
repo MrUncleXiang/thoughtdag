@@ -379,7 +379,7 @@ function Canvas() {
     st.pushHistory();
   }, []);
 
-  // Dropped-file gate: accept what we can actually parse (images, PDF,
+  // Dropped-file gate: accept what we can actually parse (images, PDF, notebooks,
   // text/code). Word and friends would ingest as binary soup — reject with
   // an actionable hint instead.
   const filterDroppedFiles = useCallback((list: FileList | File[]): File[] => {
@@ -387,7 +387,7 @@ function Canvas() {
     for (const f of Array.from(list)) {
       const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
       if (f.type.startsWith('image/') || f.type === 'application/pdf' || f.type.startsWith('text/')
-        || ['pdf', 'docx', 'txt', 'md', 'csv', 'json', 'yaml', 'yml', 'toml', 'js', 'ts', 'tsx', 'jsx', 'py', 'sh', 'c', 'cpp', 'h', 'java', 'rs', 'go', 'rb', 'swift', 'css', 'html', 'xml', 'sql', 'tex', 'bib'].includes(ext)) {
+        || ['pdf', 'docx', 'ipynb', 'txt', 'md', 'csv', 'json', 'yaml', 'yml', 'toml', 'js', 'ts', 'tsx', 'jsx', 'py', 'sh', 'c', 'cpp', 'h', 'java', 'rs', 'go', 'rb', 'swift', 'css', 'html', 'xml', 'sql', 'tex', 'bib'].includes(ext)) {
         ok.push(f);
       } else {
         toast('info', fmt(ti('toast.unsupportedFile'), { name: f.name }));

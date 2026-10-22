@@ -3,6 +3,7 @@ import { ChevronRight, FileText, Loader2, Paperclip, X, BookOpen } from 'lucide-
 import { useStore } from '../../store';
 import { useUiStore } from '../../lib/ui-store';
 import { processFile, FILE_INPUT_ACCEPT } from '../../lib/attachments';
+import { isNotebook } from '../../lib/notebook';
 import { useT, fmt } from '../../i18n';
 import { isViewerMode } from '../../lib/viewer';
 import type { Attachment } from '../../types';
@@ -128,6 +129,22 @@ export default function AttachmentsSection({
                     {att.type === 'application/pdf' && att.numPages != null && att.numPages > 10 && !att.isExtracting && (
                       <div className="mt-1 flex items-center gap-1.5">
                         <span className="text-2xs text-amber-600">{fmt(t('attach.pagesWarning'), { n: att.numPages, tok: (att.numPages * 1500).toLocaleString() })}</span>
+                        <button
+                          onClick={() => setAttachmentRenderMode(nodeId, att.id, att.renderMode === 'full' ? 'text-only' : 'full')}
+                          className={`text-2xs px-2 py-0.5 rounded-lg transition-colors ${
+                            att.renderMode === 'full'
+                              ? 'bg-accent/10 text-accent'
+                              : 'bg-line text-ink-muted'
+                          }`}
+                        >
+                          {att.renderMode === 'full' ? t('attach.switchTextOnly') : t('attach.enableVision')}
+                        </button>
+                      </div>
+                    )}
+                    {/* A notebook's figures go with its cells unless switched off */}
+                    {isNotebook(att) && !!att.figures?.length && (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className="text-2xs text-ink-faint">{fmt(t('attach.figures'), { n: att.figures.length })}</span>
                         <button
                           onClick={() => setAttachmentRenderMode(nodeId, att.id, att.renderMode === 'full' ? 'text-only' : 'full')}
                           className={`text-2xs px-2 py-0.5 rounded-lg transition-colors ${

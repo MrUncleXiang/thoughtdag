@@ -12,6 +12,8 @@ import { useT, fmt } from '../i18n';
 import { isViewerMode } from '../lib/viewer';
 import { loadAttachmentContent } from '../lib/attachment-vault';
 import { HtmlMaterialView } from './HtmlMaterialView';
+import { NotebookView } from './NotebookView';
+import { isNotebook } from '../lib/notebook';
 import SearchToggles from './ui/SearchToggles';
 import { useReaderDock, READER_MIN_WIDTH, READER_DEFAULT_WIDTH, READER_STRIP_WIDTH, DOCK_MIN_WINDOW, type ReaderDock } from '../lib/reader-dock';
 
@@ -140,6 +142,9 @@ function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: 
   // HTML material: original view renders the sanitized page(s), the text
   // view its extracted Markdown — the same dual channel PDFs use
   const htmlAtt = attachments.find((a) => a.type === 'text/html');
+  // Notebook: original view draws its cells, outputs and figures; the text
+  // view is the converted copy the model reads
+  const nbAtt = attachments.find(isNotebook);
   // Link snapshots carry the same dual channel: the page HTML captured at
   // fetch time renders as the original view, `question` (the extracted
   // Markdown) stays the model channel. Reader parity via a pseudo-attachment.
@@ -162,9 +167,9 @@ function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: 
     if (pdfAtt) return pdfAtt.extractedText ?? '';
     if (kind === 'file') {
       const textAtts = attachments.filter((a) => !a.type.startsWith('image/') && a.type !== 'application/pdf');
-      // an HTML file's readable copy is its extracted Markdown, never the source
+      // an HTML file's or a notebook's readable copy is its extracted text, never the source
       const parts = textAtts.map((a) => {
-        const body = a.type === 'text/html' ? (a.extractedText ?? '') : a.content;
+        const body = a.type === 'text/html' || isNotebook(a) ? (a.extractedText ?? '') : a.content;
         return textAtts.length > 1 ? `### ${a.name}\n\n${body}` : body;
       });
       // an image's readable copy is its extraction companion
@@ -183,7 +188,7 @@ function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: 
   const materialHighlights = useMemo(() => new Set((data.highlights ?? []).map((h) => h.text)), [data.highlights]);
 
   // ── PDF document + text-layer probe ──
-  const [view, setView] = useState<'original' | 'text' | 'digest'>(pdfAtt?.pageImages?.length || imageAtts.length || htmlAtt || linkHtml ? 'original' : 'text');
+  const [view, setView] = useState<'original' | 'text' | 'digest'>(pdfAtt?.pageImages?.length || imageAtts.length || htmlAtt || nbAtt || linkHtml ? 'original' : 'text');
   // image view zoom: 1 = fit the column; beyond it the row scrolls sideways
   const [imgZoom, setImgZoom] = useState(1);
   // zoomed past the column, the mouse drags the picture around: horizontal
@@ -800,7 +805,7 @@ function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: 
           )}
           {numPages != null && <span className="text-2xs text-ink-faint font-mono shrink-0">{numPages}p</span>}
           <div className="flex-1" />
-          {((pdfAtt && !pdfError) || imageAtts.length > 0 || htmlAtt || linkHtml) && (
+          {((pdfAtt && !pdfError) || imageAtts.length > 0 || htmlAtt || nbAtt || linkHtml) && (
             <div className="flex items-center rounded-lg border border-line overflow-hidden shrink-0 text-xs">
               <button
                 onClick={() => setView('original')}
@@ -929,6 +934,10 @@ function ReaderOverlay({ node, onLocate, dock }: { node: ThoughtNode; onLocate: 
 
           {view === 'original' && !pdfAtt && htmlAtt && (
             <HtmlMaterialView key={htmlAtt.id} att={htmlAtt} onSelect={(s) => setAsk(s ? { ...s } : null)} clipMode={clipMode} onClipped={handleClipped} />
+          )}
+
+          {view === 'original' && !pdfAtt && !htmlAtt && nbAtt && (
+            <NotebookView key={nbAtt.id} att={nbAtt} />
           )}
 
           {view === 'original' && !pdfAtt && !htmlAtt && linkPseudoAtt && (
