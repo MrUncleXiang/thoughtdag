@@ -4,7 +4,7 @@
 // panel. Cards are made in the background after a recall, so an ask never
 // waits for them — the first time, the clipped text goes in instead.
 import { get as idbGet, set as idbSet } from 'idb-keyval';
-import { llmCall } from './api';
+import { backgroundCall } from './background-model';
 import { getModelsOnce } from './use-models';
 import { useStore } from '../store';
 import { countTokens } from '../utils';
@@ -23,7 +23,7 @@ export async function cachedCard(session: string, turn: number): Promise<string 
 export async function makeCard(session: string, turn: number, text: string): Promise<string | undefined> {
   const bg = (await getModelsOnce())?.default ?? undefined;
   const prompt = `Condense the past exchange below into a card of at most 60 words (or 120 Chinese characters), in the exchange's own language: what was asked, what was concluded or decided, the names, numbers and file names that matter. No preamble, no markdown. Output only the card.\n\n${text.slice(0, 6000)}`;
-  const raw = await llmCall([{ role: 'user', content: prompt }], undefined, bg);
+  const { text: raw } = await backgroundCall([{ role: 'user', content: prompt }], { prefer: [bg] });
   const card = raw.trim().replace(/^["“「]|["”」]$/g, '').slice(0, CARD_CAP_CHARS);
   if (card.length < 20) return undefined;
   try { await idbSet(key(session, turn), card); } catch { /* the card still serves this once */ }

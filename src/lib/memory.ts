@@ -1,4 +1,5 @@
-import { llmCall, type ContextMessage } from './api';
+import type { ContextMessage } from './api';
+import { backgroundCall } from './background-model';
 import { getModelsOnce } from './use-models';
 import { toast, useUiStore } from './ui-store';
 import { whyBridge } from './why-bridge';
@@ -196,14 +197,14 @@ export function judgeMemory(question: string, response: string, canvas?: MemoryC
         if (d.durable < (d.category === 'project' ? MEMORY_PROJECT_BAR : MEMORY_DURABLE_BAR)) return;
         if (d.category === 'identity' && d.stated < MEMORY_STATED_BAR) return;
         const ask = `Record the durable fact about the user that the exchange below reveals (kind: ${d.category}) as ONE short sentence in the language the user writes in. Output only the sentence.`;
-        const raw = await llmCall([{ role: 'user', content: `${ask}\n\nExchange:\nUser: ${question.slice(0, 2000)}\nAssistant: ${response.slice(0, 2000)}` }], undefined, bg);
+        const { text: raw } = await backgroundCall([{ role: 'user', content: `${ask}\n\nExchange:\nUser: ${question.slice(0, 2000)}\nAssistant: ${response.slice(0, 2000)}` }], { prefer: [bg] });
         const text = raw.trim().split('\n').map((l) => l.trim()).find((l) => l.length > 1)?.replace(/^["“「]|["”」]$/g, '') ?? '';
         verdict = { action: d.covers ? 'update' : 'add', ...(d.covers ? { id: d.covers } : {}), text, category: d.category, evidence: d.stated >= MEMORY_STATED_BAR ? 'stated' : 'inferred' };
       } else {
         const listed = existing.slice(0, 40).map((m) => `${m.id}: ${m.text}`).join('\n') || '(none)';
-        const raw = await llmCall([
+        const { text: raw } = await backgroundCall([
           { role: 'user', content: `Existing memory entries:\n${listed}\n\nExchange:\nUser: ${question.slice(0, 2000)}\nAssistant: ${response.slice(0, 2000)}\n\n${JUDGE_PROMPT}` },
-        ], undefined, bg);
+        ], { prefer: [bg] });
         const match = raw.match(/\{[\s\S]*\}/);
         if (!match) return;
         verdict = JSON.parse(match[0]) as JudgeVerdict;

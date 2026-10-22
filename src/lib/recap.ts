@@ -1,7 +1,7 @@
 import { useStore } from '../store';
 import { toast } from './ui-store';
 import { t as ti } from '../i18n';
-import { llmCall } from './api';
+import { backgroundCall } from './background-model';
 import { spawnContentNode } from './content';
 import { formatStamp } from '../utils';
 
@@ -56,7 +56,7 @@ export async function recapToNote(nodeId: string): Promise<void> {
     const open = st.nodes
       .filter((x) => !sources.has(x.id) && x.data.summaryTypes?.[x.data.responseIndex] === 'open')
       .map((x) => `- ${String(x.data.summaries?.[x.data.responseIndex] ?? x.data.question).slice(0, 120)}`);
-    const text = await llmCall([{
+    const { text } = await backgroundCall([{
       role: 'user',
       content: `${ti('continue.genPrompt')}\n\n${ti('continue.genTrail')}\n${trail.join('\n') || '-'}\n\n[Q] ${n.data.question}\n[A] ${String(n.data.response).slice(0, 2000)}\n\n${ti('continue.genOpen')}\n${open.join('\n') || '-'}`,
     }]);

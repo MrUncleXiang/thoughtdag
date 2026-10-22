@@ -986,25 +986,62 @@ app.post('/api/runtime-key', async (req, res) => {
 // OpenRouter models take a reasoning switch; Zhipu's flash models always think
 // ("该模型始终思考，不支持关闭思考") and the provider library exposes no effort
 // level, so they keep their defaults.
-const noThink = (base) => ({ ...(base ?? {}), openrouter: { ...(base?.openrouter ?? {}), reasoning: { enabled: false } } });
+// The switch is a preference, never a condition: some endpoints refuse it
+// ("Reasoning is mandatory for this endpoint", z-ai/glm-5.3-flash and
+// openrouter/auto among them, 2026-10-22, answered with HTTP 400), and a fast
+// call must not fail where the ordinary call succeeds. A failed quiet request
+// is sent again as the ordinary one. Only a rejection of the request itself
+// (400, 404, 422) is remembered, so that model's later fast calls go out
+// ordinary from the start; a 5xx or a dropped connection says nothing about
+// the switch, and the next fast call tries quiet again. The provider's wording
+// is never parsed; statuses no request shape can change (the key, the
+// balance, the rate) and a caller who left skip the second request.
+const quietOptions = (entry) => entry.providerOptions?.openrouter
+  ? { ...entry.providerOptions, openrouter: { ...entry.providerOptions.openrouter, reasoning: { enabled: false } } }
+  : null;
+const quietRefused = new Set();
+const UNCHANGEABLE_STATUS = new Set([401, 402, 403, 429]);
+const REFUSAL_STATUS = new Set([400, 404, 422]);
+const upstreamStatus = (err) => err?.statusCode ?? err?.lastError?.statusCode;
+async function generateForBackground(entry, id, args, fast) {
+  const quiet = fast && !quietRefused.has(id) ? quietOptions(entry) : null;
+  if (!quiet) return generateText({ ...args, providerOptions: entry.providerOptions });
+  try {
+    return await generateText({ ...args, providerOptions: quiet });
+  } catch (err) {
+    const status = upstreamStatus(err);
+    if (args.abortSignal?.aborted || UNCHANGEABLE_STATUS.has(status)) throw err;
+    const out = await generateText({ ...args, providerOptions: entry.providerOptions });
+    if (REFUSAL_STATUS.has(status)) {
+      quietRefused.add(id);
+      console.warn(`[fast] ${id} refused the reasoning switch, its fast calls now go out ordinary: ${err?.message}`);
+    }
+    return out;
+  }
+}
 
 app.post('/api/claude', async (req, res) => {
   const { messages, model: modelId, images, providers, fast } = req.body;
   const resolved = resolveModel(modelId || DEFAULT_MODEL, images && images.length > 0, providers);
   if (!resolved) { res.status(503).json({ error: 'No model configured. Add an API key first.' }); return; }
   const { entry, id: actualModelId } = resolved;
+  // a caller that gave up (a background call's deadline, a closed page) stops the upstream call with it:
+  // nothing would read the answer, and it would still be billed
+  const left = new AbortController();
+  res.on('close', () => { if (!res.writableFinished) left.abort(); });
 
   try {
     const prompt = toSdkPrompt(messages, images);
-    const { text, usage } = await generateText({
+    const { text, usage } = await generateForBackground(entry, actualModelId, {
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       model: entry.model(),
       system: prompt.system,
       messages: prompt.messages,
-      providerOptions: fast ? noThink(entry.providerOptions) : entry.providerOptions,
-    });
+      abortSignal: left.signal,
+    }, fast);
     res.json({ text, usage, model: actualModelId });
   } catch (err) {
+    if (left.signal.aborted) return;
     console.error('Generate error:', err);
     res.status(500).json({ error: `[${actualModelId}] ${err.message}` });
   }

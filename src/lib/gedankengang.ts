@@ -1,4 +1,4 @@
-import { llmCall } from './api';
+import { backgroundCall } from './background-model';
 import { activeSummary } from '../utils';
 import { collectTimeline } from './timeline';
 import type { ThoughtNode, ThoughtEdge, ThoughtData } from '../types';
@@ -59,7 +59,7 @@ export async function generateGedankengang(nodes: ThoughtNode[], edges: ThoughtE
   if (omitted > 0) lines.push(`(${omitted} plain steps omitted from this list)`);
   void edges; // topology folds into creation order for now — wiring detail
 
-  const raw = await llmCall([
+  const { text: raw } = await backgroundCall([
     {
       role: 'user',
       content: `Opening question of a thinking map: ${root?.data.question?.slice(0, 300) ?? '(untitled)'}\n\nThe takeaway of every step, in the order they were thought (tags: RULEOUT = killed an option, DECISION = chose, PIVOT = reframed, OPEN = still unresolved):\n${lines.join('\n')}\n\nWrite the JOURNEY of this thinking as one flowing paragraph a reader absorbs in twenty seconds: where it started, what got ruled out, where it turned, where it landed, what remains open. Only the turns that mattered — do not enumerate every step. Hard limit: 250 characters for CJK languages, 500 characters otherwise. Write in ${lang === 'zh' ? 'Chinese' : 'English'} (the reader's interface language), even if the takeaway lines mix languages. Never use dash characters (—, –, -); use commas, colons or full stops. Output only the paragraph.`,

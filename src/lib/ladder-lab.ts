@@ -27,7 +27,7 @@ function compileFor(nodeId: string): ContextMessage[] {
     const idx = n.data.responseIndex;
     const response = n.data.responses?.[idx] ?? n.data.response;
     const ctx = ladderContextFor(nodeId, st.nodes, st.edges);
-    const run = async (opts: LadderOptions) => { const l = await buildLadder(n.data.question, response, model, opts); return l ? { topic: levelText(l, 0), takeaway: levelText(l, 1), brief: levelText(l, 2), abstract: levelText(l, 3), context: l.context, revision: !!l.revision, move: l.move ?? null } : null; };
+    const run = async (opts: LadderOptions) => { const l = await buildLadder(n.data.question, response, [model], opts); return l ? { topic: levelText(l, 0), takeaway: levelText(l, 1), brief: levelText(l, 2), abstract: levelText(l, 3), context: l.context, revision: !!l.revision, move: l.move ?? null } : null; };
     return { question: n.data.question, stored: n.data.summaries?.[idx] ?? null, storedTopic: n.data.summaryTopics?.[idx] ?? null, none: await run({}), thread: await run({ thread: ctx.thread, parentAnswer: ctx.parentAnswer }), full: withFull ? await run({ context: compileFor(nodeId), thread: ctx.thread, parentAnswer: ctx.parentAnswer }) : null, threadText: ctx.thread };
   },
 };

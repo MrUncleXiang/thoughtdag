@@ -14,6 +14,7 @@ const runtimeLabelOf = (id: string): string => { const rt = runtimeOf(id); if (r
 const loadOpenRuntimes = (): Set<string> => { try { const v = JSON.parse(localStorage.getItem(OPEN_RUNTIMES_KEY) ?? '[]'); return new Set(Array.isArray(v) ? v : []); } catch { return new Set(); } };
 import { refreshStoredProviders, pushProviders, storedProviders } from '../../lib/runtime-providers';
 import { IN_HARNESS } from '../../lib/embedded';
+import { apiVisionModels } from '../../lib/background-model';
 import { fmt } from '../../i18n';
 import { useT } from '../../i18n';
 
@@ -360,7 +361,8 @@ function GlobalCapabilities() {
   const memoryCount = useUiStore((s) => profileLines(s.profile).length);
   const setMemoryManagerOpen = useUiStore((s) => s.setMemoryManagerOpen);
   const caps = data?.capabilities;
-  const visionModels = (data?.models ?? []).filter((m) => m.vision);
+  // the image readers: an agent sees images inside its own runs, it does not read one for the canvas
+  const visionModels = apiVisionModels(data?.models ?? []);
   // an old proxy / offline fetch reports nothing — say nothing, not "missing"
   if (!caps) return null;
   const hasVision = visionModels.length > 0;

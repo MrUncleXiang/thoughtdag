@@ -9,7 +9,8 @@
 import type { ThoughtNode, ThoughtEdge, ThoughtData } from '../types';
 import { partitionContext } from './graph';
 import { levelText, sentencesOf } from './ladder-core';
-import { llmCall, type ContextMessage } from './api';
+import type { ContextMessage } from './api';
+import { backgroundCall } from './background-model';
 import { activeSummary, activeTopic } from '../utils';
 
 export type ChatLayer = 'outline' | 'chain' | 'material' | 'reference';
@@ -154,12 +155,13 @@ export async function askCanvas(nodes: ThoughtNode[], edges: ThoughtEdge[], focu
   const { messages, context, byAlias } = buildCanvasChat(nodes, edges, focusId, question, history, lang);
   const at = new Date().toISOString();
   try {
-    const text = await llmCall(messages, undefined, model);
+    // the picked model answers; an agent pick, or a model that fails, passes to the background order, and the turn names who answered
+    const { text, model: answeredBy } = await backgroundCall(messages, { prefer: [model] });
     const parts = citations(text, byAlias);
     const cites = [...new Set(parts.flatMap((p) => (p.kind === 'node' ? [p.id] : [])))];
     const aliases: Record<string, string> = {};
     for (const p of parts) if (p.kind === 'node') aliases[p.alias] = p.id;
-    return { turn: { id: `${Date.now()}-a`, role: 'assistant', text, at, focus: focusId, model, context, cites, aliases }, byAlias };
+    return { turn: { id: `${Date.now()}-a`, role: 'assistant', text, at, focus: focusId, model: answeredBy, context, cites, aliases }, byAlias };
   } catch (e) {
     return { turn: { id: `${Date.now()}-a`, role: 'assistant', text: '', at, focus: focusId, model, context, error: e instanceof Error ? e.message : String(e) }, byAlias };
   }

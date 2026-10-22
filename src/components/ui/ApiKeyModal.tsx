@@ -12,6 +12,7 @@ import { useT, fmt, useI18n } from '../../i18n';
 import { API_BASE } from '../../lib/constants';
 import JudgeSettings from './JudgeSettings';
 import { judgeConfigured } from '../../lib/judge';
+import { apiVisionModels } from '../../lib/background-model';
 
 // The model-interface manager: one door for every way in. Presets carry a
 // baseURL and a key page; the model list is always fetched live from the
@@ -85,7 +86,7 @@ export default function ApiKeyModal() {
     () => (data?.models ?? []).filter((m) => !providers.some((p) => p.models.some((x) => x.id === m.id))),
     [data, providers],
   );
-  const visionCount = (data?.models ?? []).filter((m) => m.vision).length;
+  const visionCount = apiVisionModels(data?.models ?? []).length;
 
   if (!open) return null;
 

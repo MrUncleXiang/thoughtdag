@@ -10,7 +10,7 @@ import {
   statParts, fallbackCaption, attributionLine, textWeight, clampWeight, TMAP_SITE_URL,
   type MapStructure, type MapStats,
 } from '../../lib/thought-map';
-import { llmCall } from '../../lib/api';
+import { backgroundCall } from '../../lib/background-model';
 
 // The thought-map console, two rooms with one door between them. Room one
 // edits the PICTURE: knobs left, live artifact centre, a feed-size
@@ -316,7 +316,7 @@ export default function ThoughtMapDialog() {
       const basePrompt = `You are naming a share image called a "thought map": a picture of how someone explored one question, node by node. Sources:\nRoot question: ${root}\nStep takeaways: ${plaques.join(' / ')}\nStructure: ${s}\n\nOutput STRICT JSON only, no code fence:\n{"title":"...","subtitle":"...","caption":"..."}\ntitle: in ${langName}, what this exploration was about, at most 16 CJK characters or 32 latin characters, evocative but concrete, no tool names.\nsubtitle: in ${langName}, one short line of context, at most 24 CJK characters or 48 latin characters.\ncaption: in ${capLangName}, 2 or 3 first-person sentences for a social post that WEAVE IN these numbers: ${capStats}. Calm and concrete, no hype, no hashtags, no emoji, no tool names.\nNever use dash characters anywhere; use commas or periods.`;
       let best: { title?: string; subtitle?: string; caption?: string } | null = null;
       for (let attempt = 0; attempt < 2; attempt++) {
-        const raw = await llmCall([{
+        const { text: raw } = await backgroundCall([{
           role: 'user',
           content: attempt === 0 ? basePrompt
             : `${basePrompt}\nYour previous title or subtitle ran past the character budget. Cut deeper: title at most 12 CJK or 24 latin characters, subtitle at most 18 CJK or 36 latin characters.`,

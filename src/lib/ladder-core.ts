@@ -32,7 +32,27 @@ const cleanMd = (s: string): string => s
   .replace(/[ \t]+/g, ' ');
 /** the answer as sentences, markdown stripped */
 export function sentencesOf(response: string): string[] {
-  return cleanMd(response.replace(/\r/g, '')).split(/\n+|(?<=[。！？；])|(?<=[.!?])\s+(?=[A-Z"“])/).map((x) => x.trim()).filter((x) => x.length >= 4);
+  const split = (s: string) => cleanMd(s).split(/\n+|(?<=[。！？；])|(?<=[.!?])\s+(?=[A-Z"“])/).map((x) => x.trim()).filter((x) => x.length >= 4);
+  const text = response.replace(/\r/g, '');
+  const prose = split(proseLines(text));
+  // an answer that is all headings and tables still has to say something
+  return prose.length >= 2 ? prose : split(text);
+}
+/** The answer without its structure lines: headings (a "## " line, or a bold line with nothing else that does
+ *  not end like a sentence), table rows, code inside fences. As sentences they read as titles where a claim is
+ *  wanted: a plaque saying "一、文章为什么要区分内外", evidence that is a table row (seen on agent answers,
+ *  2026-10-22). A bold line that ends like a sentence is the answer's own conclusion and stays. */
+function proseLines(s: string): string {
+  let fenced = false;
+  return s.split('\n').filter((line) => {
+    const t = line.trim();
+    if (/^(```|~~~)/.test(t)) { fenced = !fenced; return false; }
+    if (fenced) return false;
+    if (/^#{1,6}\s/.test(t)) return false;
+    if (/^\|.*\|$/.test(t) || /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$/.test(t)) return false;
+    const bold = /^(\*\*|__)([^*_\n]+)(\*\*|__)[:：]?$/.exec(t);
+    return !bold || /[。！？；.!?;]$/.test(bold[2].trim());
+  }).join('\n');
 }
 // Constructing an Intl.Segmenter costs milliseconds; segmenting with one costs microseconds. Building one per call
 // made a local ladder take half a second and folding a canvas of two hundred nodes take minutes (0.5.2).
@@ -131,6 +151,9 @@ export const words = (text: string, lang: 'zh' | 'en'): string[] => {
  *  has, and the answer's own sentences chosen by overlap with that takeaway
  *  (brief = the best one, abstract = the best three or four in order). Instant,
  *  offline, a little looser than a selected ladder; the plaque morphs by LCS. */
+/** words that join or lead into a phrase but do not name anything: they never open or close a local topic */
+const GLUE = /^(和|与|跟|及|并|而|而且|并且|所以|因此|因为|但|但是|不过|然而|那么|其实|首先|其次|然后|最后|总之|另外|此外|比如|例如|如果|当|在|对|把|从|关于|就是|是|的|了|也|都|就|and|or|but|so|because|then|also|however|first|finally|for|in|on|of|to|the|a|an|this|that|with|about|if|when|is|are)$/i;
+
 export function buildLocalLadder(question: string, response: string, takeaway?: string | null, topic?: string | null): Ladder | null {
   const lang: 'zh' | 'en' = isCJK(question + response.slice(0, 200)) ? 'zh' : 'en';
   const sents = sentencesOf(response);
@@ -167,9 +190,18 @@ export function buildLocalLadder(question: string, response: string, takeaway?: 
   };
   const take = (takeaway ?? '').trim() || clauseOf(briefSent.text);
   const takeItems: LadderItem[] = tokenize(take, lang).map((t) => t.t + (t.space ? ' ' : ''));
-  // topic: what the node has, else the takeaway's leading words within budget
+  // topic: what the node has, else the takeaway's leading words within budget. A connective at either end is
+  // not a subject (a plaque read "和" where the takeaway began "和 SolarisNet 的 LIF 相比"), and the first word
+  // stays whole even when it alone runs past the budget
   let top0 = (topic ?? '').trim();
-  if (!top0) { let acc = ''; for (const t of tokenize(take, lang)) { if (size(acc + t.t, lang) > b.topic) break; acc += t.t + (t.space && lang !== 'zh' ? ' ' : ''); } top0 = acc.trim() || take; }
+  if (!top0) {
+    const tks = tokenize(take, lang);
+    let from = 0; while (from < tks.length - 1 && GLUE.test(tks[from].t)) from++;
+    const kept: LadderToken[] = []; let acc = '';
+    for (const t of tks.slice(from)) { if (kept.length && size(acc + t.t, lang) > b.topic) break; kept.push(t); acc += t.t; }
+    while (kept.length > 1 && (GLUE.test(kept[kept.length - 1].t) || /^[\p{P}\p{S}]+$/u.test(kept[kept.length - 1].t))) kept.pop();
+    top0 = kept.map((t, n) => t.t + (n < kept.length - 1 && t.space && lang !== 'zh' ? ' ' : '')).join('').trim() || take;
+  }
   const topicItems: LadderItem[] = tokenize(top0, lang).map((t) => t.t + (t.space ? ' ' : ''));
   if (!brief.length || !takeItems.length) return null;
   return { tokens, abstract, sentences: top.map((t) => t.i), brief, takeaway: takeItems, topic: topicItems, model: 'local' };

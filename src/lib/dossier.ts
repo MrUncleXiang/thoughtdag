@@ -6,7 +6,7 @@
 // The chat model writes it (here, in the canvas, where the model keys
 // live); the why layer keeps it, so the desktop and the plugin share one.
 import { whyBridge } from './why-bridge';
-import { llmCall } from './api';
+import { backgroundCall } from './background-model';
 import { getModelsOnce } from './use-models';
 import { useI18n } from '../i18n';
 import { countTokens } from '../utils';
@@ -58,7 +58,7 @@ async function synthesize(name: string, description: string, current: WhyDossier
   const facts = pending.length ? `\n\nFacts filed for this topic since (from later sessions, not from the excerpts; cite them as "filed:<n>"):\n${pending.map((p, i) => `filed:${i + 1} (${p.at.slice(0, 10)}): ${p.text}`).join('\n')}` : '';
   const prompt = `You maintain a dossier about the topic "${name}"${description ? ` (${description})` : ''} for one person, written from their past conversations with assistants. It has four sections: "what" (what the topic is: 2–4 sentences), "decisions" (choices that were made; newest last; when a later excerpt reverses an earlier decision, keep one line that says what replaced what), "now" (where things stand at the latest date; the newest excerpt wins), "open" (questions still unresolved).${cur ? `\n\nThe current dossier, as JSON (sentences carry the keys of the excerpts they rest on):\n${cur}\n\nBelow are ONLY the excerpts it has not read yet, newest first.` : '\n\nBelow are the excerpts, newest first.'}\n\n${ex || '(no new excerpts)'}${facts}\n\nRevise (or write) the dossier. Every sentence must be short, concrete (names, numbers, files, dates as they appear), in ${lang}, and cite the excerpt keys it rests on in "src" (keep existing sentences' keys when they still hold; drop a sentence only when the new excerpts contradict or supersede it). Do not invent anything not in the excerpts or facts. Output ONE JSON object and nothing else: {"what":[{"text":"…","src":["key"]}],"decisions":[…],"now":[…],"open":[…],"change":"one short sentence in ${lang} saying what this revision changed"}`;
   const bg = (await getModelsOnce())?.default ?? undefined;
-  const raw = await llmCall([{ role: 'user', content: prompt }], undefined, bg);
+  const { text: raw } = await backgroundCall([{ role: 'user', content: prompt }], { prefer: [bg] });
   const m = /\{[\s\S]*\}/.exec(raw);
   if (!m) throw new Error(t('dossier.badOutput'));
   const j = JSON.parse(m[0]) as Partial<Record<DossierSection, { text?: unknown; src?: unknown }[]>> & { change?: unknown };

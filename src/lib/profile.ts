@@ -5,7 +5,7 @@
 // every rewrite leaves one line in the document's changelog. Project
 // facts do not live here — they are filed into the topic's dossier (or the
 // inbox when no topic fits). The legacy fragment list migrates on first use.
-import { llmCall } from './api';
+import { backgroundCall } from './background-model';
 import { getModelsOnce } from './use-models';
 import { useUiStore } from './ui-store';
 import { generateId } from '../utils';
@@ -99,7 +99,7 @@ export async function mergeIntoDoc(kind: ProfileKind, fact: string, origin: Fact
     const what = kind === 'preferences' ? 'how the user likes things done (language, style, format, tools, models)' : 'who the user is (role, field, expertise, long-term agenda)';
     const prompt = `A document of durable notes about one user — ${what} — one fact per line:\n\n${asDoc(lines)}\n\nA new fact was observed: "${fact}"\n\nRewrite the document so it includes the new fact: when it refines or contradicts an existing line, rewrite that line (the newest observation wins); otherwise add one line. Keep every line short and in the language the lines are written in; no duplicates, no headings, no commentary. Output the document lines only, each starting with "- ", then one last line "CHANGE: <one short sentence saying what changed>".`;
     const bg = (await getModelsOnce())?.default ?? undefined;
-    const raw = await llmCall([{ role: 'user', content: prompt }], undefined, bg);
+    const { text: raw } = await backgroundCall([{ role: 'user', content: prompt }], { prefer: [bg] });
     const out = raw.split('\n').map((l) => l.trim());
     let newLines = out.filter((l) => /^[-•*]\s+/.test(l)).map((l) => l.replace(/^[-•*]\s+/, '').trim()).filter(Boolean);
     let change = out.find((l) => /^CHANGE:/i.test(l))?.replace(/^CHANGE:\s*/i, '').trim() || fact.slice(0, 80);

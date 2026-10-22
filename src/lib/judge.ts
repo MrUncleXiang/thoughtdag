@@ -6,7 +6,7 @@
 // Laya, Von), and the configured chat model as an uncalibrated stand-in.
 // Off by default. Everything that asks the judge falls back to rules when
 // no judge answers, so the app works the same without one.
-import { llmCall } from './api';
+import { backgroundCall } from './background-model';
 import { storedProviders } from './runtime-providers';
 import { toast, useUiStore } from './ui-store';
 import { t, fmt } from '../i18n';
@@ -269,8 +269,9 @@ export async function judge(rawState: unknown, questions: Record<string, JudgeQu
   const state = cleanForJudge(rawState);
   const t0 = Date.now();
   if (effectiveProvider(s) === 'llm') {
-    const r = await llmJudge(state, questions);
-    return { provider: 'llm', model: useUiStore.getState().selectedModel ?? '', answers: r, ms: Date.now() - t0, calibrated: false };
+    // a chat model writing JSON needs longer than a judge endpoint, but not a background call's three minutes
+    const r = await llmJudge(state, questions, Math.max(opts.timeoutMs ?? 0, LLM_JUDGE_TIMEOUT_MS));
+    return { provider: 'llm', model: r.model, answers: r.answers, ms: Date.now() - t0, calibrated: false };
   }
   const w = wireFor(s, state, questions);
   const signal = opts.signal ?? AbortSignal.timeout(opts.timeoutMs ?? JUDGE_TIMEOUT_MS);
@@ -306,14 +307,17 @@ export async function judge(rawState: unknown, questions: Record<string, JudgeQu
 // costs output tokens, and its numbers are opinions, not calibrated
 // probabilities — the result says so (calibrated: false).
 
-async function llmJudge(state: unknown, questions: Record<string, JudgeQuestion>): Promise<Record<string, JudgeAnswer>> {
+const LLM_JUDGE_TIMEOUT_MS = 30_000;
+
+/** The answers and the model that gave them (the background order may pass over the picked one). */
+async function llmJudge(state: unknown, questions: Record<string, JudgeQuestion>, timeoutMs: number): Promise<{ answers: Record<string, JudgeAnswer>; model: string }> {
   const spec = Object.entries(questions).map(([k, q]) => {
     if (q.type === 'noul') return `- "${k}" (noul): ${q.instructions} → {"noul": p(yes) in [0,1]}`;
     if (q.type === 'choice') return `- "${k}" (choice): ${q.instructions}\n  options: ${Object.entries(q.criteria).map(([o, d]) => `${o} = ${d}`).join('; ')} → {"choice": option, "probabilities": {option: p, ...} summing to 1}`;
     return `- "${k}" (score): ${q.instructions}\n  levels (index 0..${q.criteria.length - 1}): ${q.criteria.map((d, i) => `${i} = ${d}`).join('; ')} → {"probabilities": {"0": p, ...} summing to 1}`;
   }).join('\n');
   const prompt = `You are a decision function. Read the STATE, then answer every QUESTION with probabilities only. Output ONE JSON object whose keys are the question ids and whose values follow the shapes given. No prose, no markdown fences.\n\nSTATE:\n${typeof state === 'string' ? state : JSON.stringify(state)}\n\nQUESTIONS:\n${spec}`;
-  const text = await llmCall([{ role: 'user', content: prompt }]);
+  const { text, model } = await backgroundCall([{ role: 'user', content: prompt }], { timeoutMs });
   const m = /\{[\s\S]*\}/.exec(text);
   if (!m) throw new Error('the model returned no JSON');
   const j = JSON.parse(m[0]) as Record<string, Record<string, unknown>>;
@@ -331,7 +335,7 @@ async function llmJudge(state: unknown, questions: Record<string, JudgeQuestion>
     if (q.type === 'choice') out[k] = { type: 'choice', choice: typeof a.choice === 'string' && keys.includes(a.choice) ? a.choice : top, probabilities: norm, confidence };
     else out[k] = { type: 'score', score: keys.reduce((e, key) => e + Number(key) * norm[key], 0), probabilities: norm, legend: Object.fromEntries(q.criteria.map((d, i) => [String(i), d])), confidence };
   }
-  return out;
+  return { answers: out, model };
 }
 
 /** A tiny decision, for the settings page's Test button (bypasses the breaker and resets it on success). */

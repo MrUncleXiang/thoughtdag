@@ -477,7 +477,8 @@ async function handleClaude(body) {
       messages: prompt.messages,
       providerOptions: entry.providerOptions,
     });
-    return json({ text: result.text });
+    // the model that answered: an id this proxy does not know falls back to its first model (as server.mjs reports it)
+    return json({ text: result.text, model: actualModelId });
   } catch (err) {
     return json({ error: `[${actualModelId}] ${err?.message || 'LLM request failed'}` }, 502);
   }

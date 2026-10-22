@@ -644,22 +644,49 @@ function ownMessagesOf(body) {
   return messages
 }
 
-/** One chat-completions request to the interface; the response as fetched (the caller reads it). */
-async function ownRequest(target, body, stream) {
+// A fast call asks OpenRouter not to think out loud. The switch is a
+// preference, never a condition (as in server.mjs): some endpoints refuse it,
+// so a failed quiet request is sent again as the ordinary one. Only a
+// rejection of the request itself (400, 404, 422) is remembered, so that
+// model's later fast calls go out ordinary from the start; a 5xx or a dropped
+// connection says nothing about the switch. Statuses no request shape can
+// change, and a caller who left, skip the second request.
+const quietRefused = new Set()
+const UNCHANGEABLE_STATUS = new Set([401, 402, 403, 429])
+const REFUSAL_STATUS = new Set([400, 404, 422])
+
+/** One chat-completions request to the interface; the response as fetched (the caller reads it).
+ *  `left`: aborts when the caller has gone, so the interface stops working (and billing) for nobody. */
+async function ownRequest(target, body, stream, left) {
   const { provider, model } = target
-  // OpenRouter searches through its `:online` variant and takes a reasoning switch; a fast call never thinks out loud
+  // OpenRouter searches through its `:online` variant and takes a reasoning switch
   const openrouter = isOpenRouterURL(provider.baseURL)
   const id = openrouter && body?.webSearch && !model.endsWith(':online') ? `${model}:online` : model
-  const payload = { model: id, messages: ownMessagesOf(body), stream, ...(openrouter ? { reasoning: { enabled: !body?.fast } } : {}) }
+  const messages = ownMessagesOf(body)
   const headers = { 'content-type': 'application/json', ...(provider.apiKey ? { authorization: `Bearer ${provider.apiKey}` } : {}), ...(openrouter ? { 'HTTP-Referer': 'https://github.com/chenxiachan/thoughtdag', 'X-Title': 'ThoughtDAG' } : {}) }
-  const res = await fetch(`${provider.baseURL}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(10 * 60 * 1000) })
-  if (!res.ok) {
+  const send = async (thinking) => {
+    const payload = { model: id, messages, stream, ...(openrouter ? { reasoning: { enabled: thinking } } : {}) }
+    const deadline = AbortSignal.timeout(10 * 60 * 1000)
+    const signal = left && typeof AbortSignal.any === 'function' ? AbortSignal.any([deadline, left]) : deadline
+    const res = await fetch(`${provider.baseURL}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(payload), signal })
+    if (res.ok) return res
     const text = await res.text().catch(() => '')
     let detail = text.slice(0, 300)
     try { const j = JSON.parse(text); detail = j?.error?.message ?? j?.message ?? detail } catch { /* not json */ }
-    throw new HttpError(res.status === 401 || res.status === 403 ? 401 : 502, `${provider.name}: HTTP ${res.status}${detail ? ' · ' + detail : ''}`)
+    const error = new HttpError(res.status === 401 || res.status === 403 ? 401 : 502, `${provider.name}: HTTP ${res.status}${detail ? ' · ' + detail : ''}`)
+    error.upstreamStatus = res.status
+    throw error
   }
-  return res
+  const key = `${provider.baseURL} ${id}`
+  if (!openrouter || !body?.fast || quietRefused.has(key)) return send(true)
+  try {
+    return await send(false)
+  } catch (error) {
+    if (left?.aborted || UNCHANGEABLE_STATUS.has(error?.upstreamStatus)) throw error
+    const res = await send(true)
+    if (REFUSAL_STATUS.has(error?.upstreamStatus)) quietRefused.add(key)
+    return res
+  }
 }
 
 /** Stream one answer from the interface as the canvas's frames: { text }, { reasoning }, [DONE]. */
@@ -688,8 +715,8 @@ async function ownStream(res, target, body, isClosed) {
 }
 
 /** One whole answer from the interface (the canvas's background calls). */
-async function ownCall(target, body) {
-  const upstream = await ownRequest(target, body, false)
+async function ownCall(target, body, left) {
+  const upstream = await ownRequest(target, body, false, left)
   const j = await upstream.json()
   const c = j?.choices?.[0]?.message?.content
   return typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => (typeof x?.text === 'string' ? x.text : '')).join('') : ''
@@ -1572,7 +1599,17 @@ export async function apply(ctx, config) {
         // the person's own interface, when the model is one of theirs
         const own = ownTargetOf(body?.model, ownProvidersOf(body?.providers), registeredProviders)
         if (own) {
-          if (path === '/claude') return sendJson(res, 200, { text: await ownCall(own, body), model: own.model })
+          if (path === '/claude') {
+            // a caller that gave up (a background call's deadline, a closed page) stops the interface with it
+            const left = new AbortController()
+            res.on('close', () => { if (!res.writableFinished) left.abort() })
+            try {
+              return sendJson(res, 200, { text: await ownCall(own, body, left.signal), model: own.model })
+            } catch (error) {
+              if (left.signal.aborted) return
+              throw error
+            }
+          }
           res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
           let closed = false
           req.on('close', () => { closed = true })

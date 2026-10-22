@@ -237,6 +237,8 @@ export async function directLlmCall(
   modelId: string,
   contextMessages: ContextMessage[],
   images?: ImageAttachment[],
+  /** the caller's deadline: aborting stops the request, not just the wait */
+  signal?: AbortSignal,
 ): Promise<string> {
   try {
     const res = await fetch(`${provider.baseURL.replace(/\/$/, '')}/chat/completions`, {
@@ -247,6 +249,7 @@ export async function directLlmCall(
         'X-Title': 'ThoughtDAG',
       },
       body: JSON.stringify({ model: modelId, messages: toOpenAiMessages(contextMessages, images) }),
+      signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => null) as { error?: { message?: string } } | null;

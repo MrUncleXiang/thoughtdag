@@ -152,13 +152,36 @@ async function guardDirectVision(modelId: string | undefined, images?: ImageAtta
 }
 
 // Non-streaming call (used for background summaries)
-export async function llmCall(contextMessages: ContextMessage[], images?: ImageAttachment[], modelOverride?: string, opts?: { /** a selection or classification call: ask the model not to think out loud (the proxy turns reasoning off where the provider allows) */ fast?: boolean }): Promise<string> {
+export type LlmCallOptions = {
+  /** a selection or classification call: ask the model not to think out loud (the proxy turns reasoning off where the provider allows) */
+  fast?: boolean;
+  /** give up after this long (background calls; a question the person asked waits as long as it takes) */
+  timeoutMs?: number;
+};
+
+export async function llmCall(contextMessages: ContextMessage[], images?: ImageAttachment[], modelOverride?: string, opts?: LlmCallOptions): Promise<string> {
+  return (await llmCallAnswered(contextMessages, images, modelOverride, opts)).text;
+}
+
+/** llmCall that also says which model answered: the proxy names it, and it is not always the one asked for
+ *  (an id the proxy does not know falls back to its default, an image reroutes to a vision model). */
+export async function llmCallAnswered(contextMessages: ContextMessage[], images?: ImageAttachment[], modelOverride?: string, opts?: LlmCallOptions): Promise<{ text: string; model: string | undefined }> {
   const modelId = modelOverride || useUiStore.getState().selectedModel || undefined;
   images = await imagesForModel(modelId, images);
+  // The deadline cancels the request itself, on the proxy lane and the direct one alike (the proxy then stops the
+  // upstream call, server.mjs), and its message names the wait
+  const timeoutMs = opts?.timeoutMs;
+  const deadline = timeoutMs ? new AbortController() : null;
+  const timer = deadline ? setTimeout(() => deadline.abort(new Error(`no answer within ${Math.round(timeoutMs! / 1000)} s`)), timeoutMs) : undefined;
+  const timedOut = (err: unknown): unknown => (deadline?.signal.aborted ? deadline.signal.reason : err);
   const direct = directProvider(modelId);
   if (direct && modelId) {
-    await guardDirectVision(modelId, images);
-    return directLlmCall(direct, modelId, contextMessages, images);
+    try {
+      await guardDirectVision(modelId, images);
+      return { text: await directLlmCall(direct, modelId, contextMessages, images, deadline?.signal), model: modelId };
+    } catch (err: unknown) {
+      throw timedOut(err);
+    } finally { clearTimeout(timer); }
   }
   try {
     const res = await fetch(API_URL, {
@@ -167,12 +190,13 @@ export async function llmCall(contextMessages: ContextMessage[], images?: ImageA
       body: JSON.stringify({
         messages: contextMessages,
         images: images?.length ? images : undefined,
-        model: modelOverride || useUiStore.getState().selectedModel || undefined,
+        model: modelId,
         ...(opts?.fast ? { fast: true } : {}),
         // browser-configured providers ride along on EVERY request — the
         // proxy builds a per-request registry and forgets it (stateless)
         providers: statelessProviders(),
       }),
+      ...(deadline ? { signal: deadline.signal } : {}),
     });
 
     if (!res.ok) {
@@ -181,10 +205,10 @@ export async function llmCall(contextMessages: ContextMessage[], images?: ImageA
     }
 
     const data = await res.json();
-    return data.text;
+    return { text: data.text, model: typeof data.model === 'string' ? data.model : modelId };
   } catch (err: unknown) {
-    throw wrapError(err);
-  }
+    throw wrapError(timedOut(err));
+  } finally { clearTimeout(timer); }
 }
 
 export interface StreamCallbacks {

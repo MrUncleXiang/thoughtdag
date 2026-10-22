@@ -17,29 +17,23 @@
 // Everything that needs no model (tokens, pieces, levels, the local ladder)
 // is in ladder-core.ts and re-exported here.
 import { llmCall, type ContextMessage } from './api';
-import { getModelsOnce } from './use-models';
-import { isAgentModel } from './agents/agent-runtime';
 import { useUiStore } from './ui-store';
+import { backgroundCall, BACKGROUND_TIMEOUT_MS } from './background-model';
 import type { Ladder, LadderItem } from '../types';
 import { isCJK, sentencesOf, tokenize, budget, size, words } from './ladder-core';
 import { countTokens } from '../utils';
 export * from './ladder-core';
 
-/** nodes whose ladder is being built right now (a fresh answer, a right-click, a batch); the offer skips them */
+/** nodes whose ladder is being built right now (a fresh answer, a right-click, a batch) */
 export const inFlight = new Set<string>();
 
-/** The model that writes a node's ladder: the answering model when it is an
- *  ordinary API model and the setting says so; otherwise the chosen or the
- *  default background model. Agents never write ladders. */
-export async function ladderModelFor(answeringModel?: string): Promise<string | undefined> {
-  const { ladderModel: pref, selectedModel } = useUiStore.getState();
-  if (pref && pref !== 'answering') return pref;
-  if (answeringModel && !isAgentModel(answeringModel)) return answeringModel;
-  // no answering model on record (an older or seeded node): the model the person has picked right now, when it is an API model
-  if (selectedModel && !isAgentModel(selectedModel)) return selectedModel;
-  const md = await getModelsOnce().catch(() => null);
-  const fallback = md?.default ?? md?.models.find((m) => !isAgentModel(m.id))?.id;
-  return fallback ?? undefined;
+/** The models a node's ladder asks for first: the summary-model setting when
+ *  one is set, else the model that answered (who answered writes). An agent
+ *  never writes one; for its answers, and whenever these fail, the shared
+ *  background order decides (lib/background-model.ts). */
+export function ladderPreference(answeringModel?: string | null): (string | null | undefined)[] {
+  const pref = useUiStore.getState().ladderModel;
+  return [pref && pref !== 'answering' ? pref : null, answeringModel];
 }
 
 const parseJson = <T,>(raw: string): T | null => { const m = /\{[\s\S]*\}/.exec(raw); try { return m ? JSON.parse(m[0]) as T : null; } catch { return null; } };
@@ -64,8 +58,10 @@ const END_PUNCT = /[。.!?！？；;，,]+$/;
 /** a written level as free-text items: one per word, carrying its trailing space (the local ladder's convention) */
 const free = (text: string, lang: 'zh' | 'en'): LadderItem[] => tokenize(text, lang).map((t) => t.t + (t.space ? ' ' : ''));
 
-/** Build a node's ladder from its exchange, seeing the thread it continues. Null when the answer is too short or the model's reply is unusable. */
-export async function buildLadder(question: string, response: string, model?: string, opts: LadderOptions = {}): Promise<Ladder | null> {
+/** Build a node's ladder from its exchange, seeing the thread it continues, on the first preferred model that
+ *  answers. Null when the answer is too short or the reply is unusable; throws BackgroundCallError when no
+ *  model answered at all. */
+export async function buildLadder(question: string, response: string, prefer: (string | null | undefined)[] = [], opts: LadderOptions = {}): Promise<Ladder | null> {
   const lang: 'zh' | 'en' = isCJK(question + response.slice(0, 200)) ? 'zh' : 'en';
   const L = lang === 'zh' ? 'Chinese' : 'English';
   const why = (r: string): null => { if (import.meta.env.DEV) console.warn('[ladder] no ladder:', r, question.slice(0, 40)); return null; };
@@ -91,11 +87,14 @@ export async function buildLadder(question: string, response: string, model?: st
     ? [...opts.context!, { role: 'assistant', content: response }, { role: 'user', content: prompt }]
     : [{ role: 'user', content: prompt }];
   type Out = { move?: unknown; topic?: unknown; takeaway?: unknown; reason?: unknown; evidence?: unknown };
-  let out = parseJson<Out>(await llmCall(messages, undefined, model, { fast: true }));
+  const first = await backgroundCall(messages, { prefer, fast: true });
+  // the model that answered writes the whole ladder: the correction below continues its own conversation
+  const model = first.model;
+  let out = parseJson<Out>(first.text);
   let takeaway = str(out?.takeaway).replace(END_PUNCT, '');
   if (!takeaway) {
     messages.push({ role: 'assistant', content: JSON.stringify(out ?? {}) }, { role: 'user', content: 'Rejected: "takeaway" is missing or empty. Return the JSON again with all five fields filled.' });
-    out = parseJson<Out>(await llmCall(messages, undefined, model, { fast: true }));
+    out = parseJson<Out>(await llmCall(messages, undefined, model, { fast: true, timeoutMs: BACKGROUND_TIMEOUT_MS }).catch(() => ''));
     takeaway = str(out?.takeaway).replace(END_PUNCT, '');
   }
   if (!takeaway) return why('no takeaway: ' + JSON.stringify(out).slice(0, 120));
