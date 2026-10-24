@@ -40,6 +40,17 @@ const DOCS = 'https://chenxiachan.github.io/thoughtdag/docs';
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
+    version: '0.5.25',
+    date: '2026-10-24',
+    announce: false,
+    lead: {
+      zh: '文件和链接在画布缩小时保持原来的卡片，和拖入的 md 文档一样，高度不再随缩放变化，内容在阅读器里看。便签缩小后仍显示摘要。识别过的 PDF 不会再在节点上露出页码标记。',
+      en: 'Files and links keep their card when you zoom out, as a dropped .md file always did, so their height no longer changes with the zoom; their text is read in the reader. Notes still turn into a summary when zoomed out. A recognized PDF no longer shows its page markers on the node.',
+    },
+    items: [],
+  },
+  {
+    // a quiet release: the 0.5.21 entry stays the announcement, this one is history only
     version: '0.5.24',
     date: '2026-10-22',
     announce: false,
