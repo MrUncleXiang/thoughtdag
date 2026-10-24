@@ -108,17 +108,18 @@ export default function ContentNode({ id, data, selected }: NodeProps<ThoughtNod
       ? <Link2 size={14} strokeWidth={1.75} className="text-accent shrink-0" />
       : <Paperclip size={14} strokeWidth={1.75} className="text-ink-muted shrink-0" />;
 
-  // Map tier: material reads like a turn — its title as the eyebrow, its own text on the zoom
-  // ladder (a note's body, a document's extracted text or digest, a link's snapshot), built
-  // locally like an older turn's. The card keeps its footprint; text past it fades.
+  // Map tier: a note reads like a turn — its heading as the eyebrow, its body on the zoom ladder,
+  // built locally like an older turn's. The card keeps its footprint; text past it fades.
+  // Files and links keep their card at every zoom, as a dropped .md always did: their text is
+  // someone else's and is read in the reader (a document's opening sentences made a poor plaque,
+  // and its height changed from one zoom step to the next).
   const noteHead = kind === 'note' ? data.question.match(/^\s*#+\s*([^\n]+)\n?/) : null;
-  const contentTitle = kind === 'file' ? (attachments[0]?.name ?? '') : kind === 'link' ? (data.linkTitle || data.linkUrl || '') : (noteHead?.[1] ?? '').trim();
+  const contentTitle = (noteHead?.[1] ?? '').trim();
   const contentBody = useMemo(() => {
-    if (kind === 'note') return noteHead ? data.question.slice(noteHead[0].length) : data.question;
-    if (kind === 'file') return attachments[0]?.extractedText || attachments[0]?.digest || '';
-    return data.question;
+    if (kind !== 'note') return '';
+    return noteHead ? data.question.slice(noteHead[0].length) : data.question;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the exact fields read
-  }, [kind, data.question, attachments]);
+  }, [kind, data.question]);
   const ladder = useLocalLadder(zoomedOut && !glyphTier && !!contentBody, id, contentTitle || data.question, contentBody, null, null);
   const plaqueLine = useRef<HTMLDivElement>(null);
   usePlaqueClip(plaqueLine, zoomedOut && !glyphTier && !!ladder, 0, ladder);
